@@ -8,15 +8,15 @@ def last_used(player, color, number):
     # adjust by 2 because of 0 indexing and 2-12 game
     # separate by ascending, descending
     if color in ["red", "orange"]:
-        for i in range(10, -1, -1):
+        for i in range(12, 1, -1):
             if player.scoresheet.rows[color].checks[i] == 1:
-                return i + 2
+                return i
             else:
                 return 2
     else:
-        for i in range(10, -1, -1):
+        for i in range(2, 13, 1):
             if player.scoresheet.rows[color].checks[i] == 1:
-                return 12 - i
+                return i
             else:
                 return 12
 
@@ -36,16 +36,9 @@ def distance(player, color, number):
 def best_move_color_step2(player, color, option1, option2):
     """find the best move for a color, returns number and distance"""
 
-    # put options in order
-    omin = min(option1, option2)
-    omax = max(option1, option2)
-
     # get distance for each move
     dist1 = distance(player, color, option1)
     dist2 = distance(player, color, option2)
-
-    # get rightmost checked number
-    last_num = last_used(player, color, option1)
 
     # need to adjust by 2 here because of 0 indexing and 2-12 game
     # if (
@@ -103,10 +96,13 @@ class Game:
             tt = Turn(self.player1, self.player2, self.finished_color)
         else:
             tt = Turn(self.player2, self.player1, self.finished_color)
-        self.finish()
+        self.check_done()
         tt.step1()
-        self.finish()
-        tt.step2()
+        self.check_done()
+        if self.gameover == 0:
+            tt.step2()
+        else:
+            self.over()
         # turn = Turn(self.player1, self.player2, self.finished_color)
         # # turn.print_dice()
         # turn.step1()
@@ -114,11 +110,10 @@ class Game:
         # turn.step2()
 
     def play(self, max):
-        # while self.gameover == 0 & self.turn < max:
-        self.t()
-        # self.gameover()
+        while self.turn < max and self.gameover == 0:
+            self.t()
 
-    def gameover(self):
+    def over(self):
         for pl in (self.player1, self.player2):
             pl.scoresheet.get_score()
         if self.player1.scoresheet.score > self.player2.scoresheet.score:
@@ -129,19 +124,22 @@ class Game:
             self.winner = "tie"
         print("Game over! " + self.winner + " wins!")
 
-    def finish(self):
+    def check_done(self):
         finished_rows = 0
         for pl in (self.player1, self.player2):
             for row in pl.scoresheet.rows.values():
-                if row.checks[10] == 1:
+                if row.ascending and row.checks[12] == 1:
                     finished_rows += 1
                     self.finished_color = row.color
-            if finished_rows == 2:
+                elif row.ascending == False and row.checks[2] == 1:
+                    finished_rows += 1
+                    self.finished_color = row.color
+            if pl.scoresheet.penalty == 4:
                 self.gameover = 1
-            elif pl.scoresheet.penalty == 4:
-                self.gameover = 1
+        if finished_rows == 2:
+            self.gameover = 1
         if self.gameover == 1:
-            self.gameover()
+            self.over()
 
 
 class Die:
@@ -213,7 +211,7 @@ class Turn:
             self.combos[color].append(
                 self.dice[color].value + self.dice["white2"].value
             )
-        pprint.pprint(self.combos)
+        # pprint.pprint(self.combos)
 
     def step1(self):
         """both players can take sum of white dice"""
@@ -223,7 +221,7 @@ class Turn:
             # dist is dictionary of color, dist pairs
             dist = {}
             for color in self.colors:
-                if pl.scoresheet.rows[color].checks[sum - 2] == 0:
+                if pl.scoresheet.rows[color].checks[sum] == 0:
                     dist[color] = distance(pl, color, sum)
             best_color = ""
             mindist = min(list(dist.values()))
@@ -232,7 +230,7 @@ class Turn:
                     # best_dist = dist
                     best_color = color
             choice = {best_color: sum}
-            print(choice)
+            print("Step 1 chioce is: " + str(choice))
             if best_color != "None":
                 pl.move(choice)
             elif pl == self.player1:
@@ -263,7 +261,7 @@ class Turn:
                         best_num = num
                         best_color = color
         choice = {best_color: best_num}
-        print(choice)
+        print("Choice in Step 2 is: " + str(choice))
         if best_num is not None and best_color != "None":
             self.player1.move(choice)
         else:
@@ -281,22 +279,7 @@ class Player:
 
     def print_scoresheet(self):
         print("Scoresheet for " + self.name + ":")
-        for row in self.scoresheet.rows.values():
-            print(row.color.title() + ": ")
-            if row.ascending:
-                # +2 needed here just like -2 needed above
-                for i in range(0, 11):
-                    print(str(i + 2) + " ", end="")
-                print("")
-                for i in range(0, 11):
-                    print(str(row.checks[i]) + " ", end="")
-            else:
-                for i in range(10, -1, -1):
-                    print(str(i + 2) + " ", end="")
-                print("")
-                for i in range(10, -1, -1):
-                    print(str(row.checks[i]) + " ", end="")
-            print("")
+        self.scoresheet.print()
 
     def move(self, choice):
         color = list(choice.keys())[0]
@@ -312,17 +295,53 @@ class Scoresheet:
         for color in ["red", "orange", "green", "blue"]:
             self.rows[color] = Scoresheet_row(color)
 
+    def print(self):
+        for row in self.rows.values():
+            print(row.color.title() + ": ")
+            # pprint.pprint(row.checks)
+            for num in row.checks.keys():
+                print(str(num) + " ", end="")
+            print("")
+            for value in row.checks.values():
+                print(str(value) + " ", end="")
+            print("")
+
     def get_score(self):
         scores = {}
         self.score = 0
         for row in self.rows.values():
-            scores[row.color] = get_score_row(row)
+            scores[row.color] = row.score()
+        pprint.pprint(scores)
         for s in scores.values():
             self.score += s
         self.score -= self.penalty * 5
 
-    def get_score_row(self, row):
-        match row.checks.sum():
+    def print_score(self):
+        self.get_score()
+        print("Score: " + str(self.score))
+
+
+class Scoresheet_row:
+    def __init__(self, color):
+        self.color = color
+        self.ascending = self.color in ["red", "orange"]
+        self.checks = {}
+        if self.ascending:
+            for i in range(2, 13):
+                self.checks[i] = 0
+        else:
+            for i in range(12, 1, -1):
+                self.checks[i] = 0
+
+    def mark(self, number):
+        self.checks[number] = 1
+
+    def score(self):
+        row_score = sum(list(self.checks.values()))
+        # print(row_score)
+        match row_score:
+            case 0:
+                return 0
             case 1:
                 return 1
             case 2:
@@ -349,15 +368,3 @@ class Scoresheet:
                 return 78
             case _:
                 return 999
-
-
-class Scoresheet_row:
-    def __init__(self, color):
-        self.color = color
-        self.ascending = self.color in ["red", "orange"]
-        self.checks = {}
-        for i in range(0, 11):
-            self.checks[i] = 0
-
-    def mark(self, number):
-        self.checks[number - 2] = 1
