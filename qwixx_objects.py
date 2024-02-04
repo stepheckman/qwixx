@@ -145,6 +145,18 @@ class Game:
 
 
 class Die:
+    """
+    Represents a die with a specific number of sides and a color.
+
+    Attributes:
+        sides (int): The number of sides on the die.
+        color (str): The color of the die.
+        value (int): The current value shown on the die.
+
+    Methods:
+        roll(): Rolls the die and updates the value.
+    """
+
     def __init__(self, color, sides=6):
         self.sides = sides
         self.color = color
@@ -152,6 +164,9 @@ class Die:
         self.roll()
 
     def roll(self):
+        """
+        Rolls the die and updates the value to a random number between 1 and the number of sides.
+        """
         self.value = random.randint(1, self.sides)
 
     # def __str__(self):
