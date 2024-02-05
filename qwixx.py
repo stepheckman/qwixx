@@ -2,6 +2,12 @@ import qwixx_objects
 
 # https://gamewright.com/pdfs/Rules/QwixxTM-RULES.pdf
 
+# still not working great:
+# need 5 in a row before finish
+# 2/12 check in step 2
+# penalties not displaying correctly
+# are they computing correctly?
+
 
 def main():
     # 2 players
