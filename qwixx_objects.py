@@ -84,8 +84,8 @@ class Game:
         self.player2 = player2
         self.turn = 0
         self.gameover = 0
-        self.finished_rows = 0
-        self.finished_color = ""
+        # set of colors that are filled up for both players
+        self.finished_rows = []
         self.winner = None
 
     def t(self):
@@ -93,9 +93,9 @@ class Game:
         print("\n*** Turn " + str(self.turn) + " ***")
 
         if self.turn % 2 == 1:
-            tt = Turn(self.player1, self.player2, self.finished_color)
+            tt = Turn(self.player1, self.player2, self.finished_rows)
         else:
-            tt = Turn(self.player2, self.player1, self.finished_color)
+            tt = Turn(self.player2, self.player1, self.finished_rows)
         self.check_done()
         tt.step1()
         self.check_done()
@@ -122,21 +122,25 @@ class Game:
             self.winner = self.player2.name.title()
         else:
             self.winner = "tie"
-        print("Game over! " + self.winner + " wins!")
+        print("\nGame over! " + self.winner + " wins!")
+        for p in (self.player1, self.player2):
+            p.print_scoresheet()
+        for p in (self.player1, self.player2):
+            print(p.scoresheet.print_score())
+        exit()
 
     def check_done(self):
-        finished_rows = 0
         for pl in (self.player1, self.player2):
             for row in pl.scoresheet.rows.values():
-                if row.ascending and row.checks[12] == 1:
-                    finished_rows += 1
-                    self.finished_color = row.color
-                elif row.ascending == False and row.checks[2] == 1:
-                    finished_rows += 1
-                    self.finished_color = row.color
+                if row.color not in self.finished_rows:
+                    if (row.ascending and row.checks[12] == 1) or (
+                        row.ascending is False and row.checks[2] == 1
+                    ):
+                        self.finished_rows.append(row.color)
             if pl.scoresheet.penalty == 4:
                 self.gameover = 1
-        if finished_rows == 2:
+        if len(self.finished_rows) == 2:
+            pprint.pprint(self.finished_rows)
             self.gameover = 1
         if self.gameover == 1:
             self.over()
@@ -172,12 +176,16 @@ class Die:
 
 
 class Turn:
-    def __init__(self, player1, player2, finished_color):
+    def __init__(self, player1, player2, finished_rows):
         self.colors = ["red", "orange", "green", "blue"]
-        if finished_color != "" and finished_color in self.colors:
-            self.colors.remove(finished_color)
-        # else:
-        #     print("Something went wrong with finished_color")
+        self.p1_penalty = 0  # if counter gets to 2, player1 gets a penalty
+
+        # finished-rows should only have one entry -- if there are 2, game is over
+        if len(finished_rows) == 1:
+            # finished_color = finished_rows{0}
+            self.colors.remove(finished_rows[0])
+        elif len(finished_rows) > 1:
+            print("Game over! -- something is wrong")
         self.colors_all = self.colors[:]
         # add 2 white dice
         self.colors_all.append("white1")
@@ -194,7 +202,6 @@ class Turn:
             for die in self.dice.values():
                 die.roll()
         self.combos = {}
-        self.penalty = 0  # if counter gets to 2, player1 gets a penalty
 
     def print_dice(self):
         print("Dice:")
@@ -215,26 +222,39 @@ class Turn:
 
     def step1(self):
         """both players can take sum of white dice"""
-        sum = self.dice["white1"].value + self.dice["white2"].value
+        white_sum = self.dice["white1"].value + self.dice["white2"].value
 
         for pl in (self.player1, self.player2):
             # dist is dictionary of color, dist pairs
             dist = {}
             for color in self.colors:
-                if pl.scoresheet.rows[color].checks[sum] == 0:
-                    dist[color] = distance(pl, color, sum)
+                # check that white_sum is not checked in player, color
+                if pl.scoresheet.rows[color].checks[white_sum] == 0:
+                    if (white_sum == 12 and color in ["red", "orange"]) or (
+                        white_sum == 2 and color in ["blue", "green"]
+                    ):
+                        # can't pick 2/12 unless you already have 5
+                        marks = list(pl.scoresheet.rows[color].checks.values())
+                        print("list: " + str(marks))
+                        print("sum of list: " + str(sum(marks)))
+                        ct = sum(marks)
+                        if ct >= 5:
+                            # print("more than 5")
+                            dist[color] = distance(pl, color, white_sum)
+                    else:
+                        dist[color] = distance(pl, color, white_sum)
             best_color = ""
-            mindist = min(list(dist.values()))
-            for color, d in dist.items():
-                if d == mindist:
-                    # best_dist = dist
-                    best_color = color
-            choice = {best_color: sum}
-            print("Step 1 chioce is: " + str(choice))
-            if best_color != "None":
+            if len(list(dist.values())) == 0:
+                self.p1_penalty += 1
+            else:
+                mindist = min(list(dist.values()))
+                for color, d in dist.items():
+                    if d == mindist:
+                        # best_dist = dist
+                        best_color = color
+                choice = {best_color: white_sum}
+                # if best_color != "None":
                 pl.move(choice)
-            elif pl == self.player1:
-                self.penalty += 1
 
     def step2(self):
         """step2: player1 can take another X"""
@@ -261,14 +281,15 @@ class Turn:
                         best_num = num
                         best_color = color
         choice = {best_color: best_num}
-        print("Choice in Step 2 is: " + str(choice))
+        # print("Choice in Step 2 is: " + str(choice))
         if best_num is not None and best_color != "None":
             self.player1.move(choice)
         else:
-            self.penalty += 1
-        # if we satify both penalty conditions, take an penalty
-        if self.penalty == 2:
-            self.player1.scoresheet.penalty += 1
+            self.p1_penalty += 1
+
+        # if we satify both penalty conditions, p1 get a penalty
+        if self.p1_penalty == 2:
+            self.player1.scoresheet.take_penalty()
 
 
 class Player:
@@ -291,9 +312,14 @@ class Scoresheet:
     def __init__(self):
         self.score = 0
         self.penalty = 0
+        self.penalty_show = ""
         self.rows = {}
         for color in ["red", "orange", "green", "blue"]:
             self.rows[color] = Scoresheet_row(color)
+
+    def take_penalty(self):
+        self.penalty += 1
+        self.penalty_show += "X"
 
     def print(self):
         for row in self.rows.values():
@@ -305,13 +331,15 @@ class Scoresheet:
             for value in row.checks.values():
                 print(str(value) + " ", end="")
             print("")
+        print(" " + self.penalty_show, end="")
+        print("")
 
     def get_score(self):
         scores = {}
         self.score = 0
         for row in self.rows.values():
             scores[row.color] = row.score()
-        pprint.pprint(scores)
+        # pprint.pprint(scores)
         for s in scores.values():
             self.score += s
         self.score -= self.penalty * 5

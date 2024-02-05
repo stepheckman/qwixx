@@ -11,10 +11,6 @@ def main():
     game = qwixx_objects.Game(player1=hopper, player2=lacey)
     game.play(max=40)
 
-    for p in (lacey, hopper):
-        p.print_scoresheet()
-        print(p.scoresheet.print_score())
-
 
 if __name__ == "__main__":
     main()
