@@ -1,4 +1,6 @@
 # qwixx
 fun qwixx game from Christmas 2023
 
-works for 1 turn!
+automatic play for 2 players
+
+both use same (not great) strategy
