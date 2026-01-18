@@ -1,0 +1,5 @@
+[project]
+name = "qwixx_with_roo"
+version = "0.1.0"
+requires-python = ">= 3.13.2"
+dependencies = ["pygame>=2.5.0", "loguru>=0.7.0"]
