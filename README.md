@@ -28,8 +28,8 @@ Refactored version of the Qwixx game with a FastAPI backend and React frontend.
    ```
 
 2. Open your browser and navigate to:
-   - Frontend: `http://localhost:7000`
-   - Backend API Docs: `http://localhost:7001/docs`
+   - Frontend: `http://localhost:7003`
+   - Backend API Docs: `http://localhost:7004/docs`
 
 ### Development
 

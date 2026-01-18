@@ -8,8 +8,8 @@ services:
       - ./backend:/app
       - ./logs:/app/logs
     ports:
-      - "7001:7001"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 7001 --reload
+      - "7004:7004"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 7004 --reload
 
   frontend:
     restart: unless-stopped
@@ -20,8 +20,8 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "7000:5173"
+      - "7003:5173"
     environment:
-      - VITE_API_URL=http://localhost:7001
+      - VITE_API_URL=http://localhost:7004
     depends_on:
       - backend
