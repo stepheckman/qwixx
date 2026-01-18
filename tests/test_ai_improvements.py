@@ -3,14 +3,10 @@
 Test script to verify AI improvements are working correctly.
 """
 
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-
-from src.ai_player import AIPlayer
-from src.die import DieColor
-from src.game_state import GameState
-from src.dice_roller import DiceRoller
+from app.core.ai_player import AIPlayer
+from app.core.die import DieColor
+from app.core.game_state import GameState
+from app.core.dice_roller import DiceRoller
 
 class MockGame:
     """Mock game class for testing AI functionality."""

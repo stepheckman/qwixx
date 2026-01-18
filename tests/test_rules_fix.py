@@ -1,6 +1,6 @@
 
 import unittest
-from src.scoresheet import ColorRow, DieColor
+from app.core.scoresheet import ColorRow, DieColor
 
 class TestRuleFixes(unittest.TestCase):
     def setUp(self):

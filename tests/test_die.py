@@ -1,5 +1,5 @@
 import unittest
-from src.die import Die, DieColor
+from app.core.die import Die, DieColor
 
 class DieTests(unittest.TestCase):
     def test_roll_updates_value(self):

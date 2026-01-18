@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./backend:/app
+      - ./tests:/app/tests
       - ./logs:/app/logs
     ports:
       - "7004:7004"

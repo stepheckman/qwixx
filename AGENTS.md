@@ -6,6 +6,8 @@
 - `tests/` contains Python test scripts and unit tests (some are standalone runners).
 - `logs/` is mounted into the backend container for runtime logs.
 
+- `.agent/workflows/` has markdown files (*.md) that should be registered as custom slash commands
+
 ## Build, Test, and Development Commands
 - `just docker-up`: Start backend and frontend services with Docker Compose.
 - `just docker-down`: Stop the running services.

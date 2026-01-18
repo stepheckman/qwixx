@@ -3,10 +3,12 @@
 Test script to verify logging functionality.
 """
 
-import pygame
-import sys
-from src.game import Game
-from src.logger import setup_logging
+import pytest
+
+pygame = pytest.importorskip("pygame")
+
+from app.core.game import Game
+from app.core.logger import setup_logging
 
 def test_logging():
     """Test the logging functionality."""
