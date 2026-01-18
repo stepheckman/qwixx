@@ -1,6 +1,8 @@
 # Qwixx Web Application
 
-Refactored version of the Qwixx game with a FastAPI backend and React frontend.
+Refactored version of the Qwixx game from Christmas 2023 with a FastAPI backend and React frontend.
+
+Automatic play is available for two players using the same (not great) strategy.
 
 ## Architecture
 
