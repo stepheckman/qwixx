@@ -35,6 +35,12 @@ class ColorRow:
         if self.is_locked or number in self.marked or number not in self.numbers:
             return False
         
+        # Check if marking the rightmost number (12 for red/yellow, 2 for green/blue)
+        # Rule: Can only mark the rightmost number if at least 5 numbers are ALREADY marked
+        if number == self.numbers[-1]:
+            if len(self.marked) < 5:
+                return False
+        
         # Find the position of this number
         try:
             position = self.numbers.index(number)
@@ -74,6 +80,9 @@ class ColorRow:
             True if the row can be locked, False otherwise
         """
         if len(self.marked) < 5:
+            # This check is technically redundant if can_mark enforces it,
+            # but good for safety. Note: if the rightmost is marked,
+            # we must have had >=5 marks before that, so marked count is >= 6 now.
             return False
         
         # Check if the rightmost number is marked
@@ -100,10 +109,15 @@ class ColorRow:
         1 mark = 1 point, 2 marks = 3 points, 3 marks = 6 points, etc.
         Formula: n * (n + 1) / 2
         
+        Rule: If the row is locked, count one extra mark for the lock itself.
+        
         Returns:
             The score for this row
         """
         n = len(self.marked)
+        if self.is_locked:
+            n += 1
+            
         return n * (n + 1) // 2
 
 class Scoresheet:

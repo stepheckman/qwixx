@@ -90,7 +90,7 @@ class SplashScreen:
             100,
             40,
             "Back",
-            COLORS['gray']
+            'secondary'
         )
         
         self.selected_players: Optional[int] = None
@@ -158,55 +158,72 @@ class SplashScreen:
         self.screen.fill(COLORS['background'])
         
         # Draw title
-        title_text = self.font_large.render("QWIXX", True, COLORS['black'])
-        title_rect = title_text.get_rect(center=(self.screen.get_width() // 2, 150))
+        title_text = self.font_large.render("QWIXX", True, COLORS['text'])
+        title_rect = title_text.get_rect(center=(self.screen.get_width() // 2, 120))
         self.screen.blit(title_text, title_rect)
         
         if not self.show_ai_selection:
             # Player count selection screen
             # Draw subtitle
-            subtitle_text = self.font_medium.render("Choose Number of Players", True, COLORS['dark_gray'])
-            subtitle_rect = subtitle_text.get_rect(center=(self.screen.get_width() // 2, 200))
+            subtitle_text = self.font_medium.render("Choose Number of Players", True, COLORS['text_secondary'])
+            subtitle_rect = subtitle_text.get_rect(center=(self.screen.get_width() // 2, 180))
             self.screen.blit(subtitle_text, subtitle_rect)
             
-            # Draw description for single player
-            desc1_text = self.font_small.render("1 Player: You vs AI", True, COLORS['gray'])
-            desc1_rect = desc1_text.get_rect(center=(self.screen.get_width() // 2, 320))
+            # --- 1 PLAYER SECTION ---
+            # Button (moved up to avoid overlap)
+            # Center Y ~ 300
+            self.one_player_button.rect.y = 260
+            self.one_player_button.draw(self.screen)
+            
+            # Description (below button)
+            desc1_text = self.font_small.render("1 Player: You vs AI", True, COLORS['text_secondary'])
+            desc1_rect = desc1_text.get_rect(center=(self.screen.get_width() // 2, 330))
             self.screen.blit(desc1_text, desc1_rect)
             
-            # Draw description for two players
-            desc2_text = self.font_small.render("2 Players: Local multiplayer", True, COLORS['gray'])
-            desc2_rect = desc2_text.get_rect(center=(self.screen.get_width() // 2, 400))
-            self.screen.blit(desc2_text, desc2_rect)
-            
-            # Draw buttons
-            self.one_player_button.draw(self.screen)
+            # --- 2 PLAYERS SECTION ---
+            # Button (spaced out)
+            self.two_player_button.rect.y = 380
             self.two_player_button.draw(self.screen)
+            
+            # Description (below button)
+            desc2_text = self.font_small.render("2 Players: Local multiplayer", True, COLORS['text_secondary'])
+            desc2_rect = desc2_text.get_rect(center=(self.screen.get_width() // 2, 450))
+            self.screen.blit(desc2_text, desc2_rect)
         
         else:
             # AI strategy selection screen
             # Draw subtitle
-            subtitle_text = self.font_medium.render("Choose AI Difficulty", True, COLORS['dark_gray'])
-            subtitle_rect = subtitle_text.get_rect(center=(self.screen.get_width() // 2, 200))
+            subtitle_text = self.font_medium.render("Choose AI Difficulty", True, COLORS['text_secondary'])
+            subtitle_rect = subtitle_text.get_rect(center=(self.screen.get_width() // 2, 180))
             self.screen.blit(subtitle_text, subtitle_rect)
             
-            # Draw strategy descriptions
-            easy_desc = self.font_small.render("Easy: Makes random moves, sometimes skips turns", True, COLORS['gray'])
-            easy_rect = easy_desc.get_rect(center=(self.screen.get_width() // 2, 280))
+            start_y = 240
+            spacing = 100
+            
+            # --- EASY ---
+            self.easy_button.rect.y = start_y
+            self.easy_button.draw(self.screen)
+            
+            easy_desc = self.font_small.render("Random moves, sometimes skips details", True, COLORS['text_secondary'])
+            easy_rect = easy_desc.get_rect(center=(self.screen.get_width() // 2, start_y + 60))
             self.screen.blit(easy_desc, easy_rect)
             
-            medium_desc = self.font_small.render("Medium: Uses basic strategy, good for beginners", True, COLORS['gray'])
-            medium_rect = medium_desc.get_rect(center=(self.screen.get_width() // 2, 360))
+            # --- MEDIUM ---
+            self.medium_button.rect.y = start_y + spacing
+            self.medium_button.draw(self.screen)
+            
+            medium_desc = self.font_small.render("Basic strategy, good for beginners", True, COLORS['text_secondary'])
+            medium_rect = medium_desc.get_rect(center=(self.screen.get_width() // 2, start_y + spacing + 60))
             self.screen.blit(medium_desc, medium_rect)
             
-            hard_desc = self.font_small.render("Hard: Advanced strategy with look-ahead, challenging", True, COLORS['gray'])
-            hard_rect = hard_desc.get_rect(center=(self.screen.get_width() // 2, 440))
+            # --- HARD ---
+            self.hard_button.rect.y = start_y + (spacing * 2)
+            self.hard_button.draw(self.screen)
+            
+            hard_desc = self.font_small.render("Advanced strategy, challenging", True, COLORS['text_secondary'])
+            hard_rect = hard_desc.get_rect(center=(self.screen.get_width() // 2, start_y + (spacing * 2) + 60))
             self.screen.blit(hard_desc, hard_rect)
             
-            # Draw strategy buttons
-            self.easy_button.draw(self.screen)
-            self.medium_button.draw(self.screen)
-            self.hard_button.draw(self.screen)
             self.back_button.draw(self.screen)
     
     def get_selected_players(self) -> Optional[int]:

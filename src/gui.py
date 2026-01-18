@@ -7,22 +7,28 @@ from typing import Dict, List, Optional, Tuple
 from .die import DieColor
 from .game_state import GameState
 
-# Color constants - Modern, professional color scheme
+# Color constants - Modern Dark Mode color scheme
 COLORS = {
     'white': (255, 255, 255),
-    'black': (33, 37, 41),
+    'black': (0, 0, 0),
     'red': (220, 53, 69),
     'yellow': (255, 193, 7),
     'green': (40, 167, 69),
-    'blue': (0, 123, 255),
-    'gray': (108, 117, 125),
-    'light_gray': (248, 249, 250),
-    'medium_gray': (173, 181, 189),
-    'dark_gray': (52, 58, 64),
-    'background': (248, 249, 250),
-    'card_background': (255, 255, 255),
-    'border': (222, 226, 230),
-    'shadow': (0, 0, 0, 20),
+    'blue': (13, 110, 253), # Brighter blue for dark mode
+    'gray': (158, 158, 158),
+    'light_gray': (224, 224, 224),
+    'medium_gray': (66, 66, 66),
+    'dark_gray': (33, 33, 33),
+    
+    # Semantic Colors for Dark Mode
+    'background': (18, 18, 18),        # Very dark gray/black
+    'card_background': (30, 30, 30),   # Slightly lighter for cards/boxes
+    'text': (240, 240, 240),           # Off-white for main text
+    'text_secondary': (176, 176, 176), # Dimmer text
+    'border': (66, 66, 66),            # Dark gray border
+    'shadow': (0, 0, 0, 100),          # Stronger shadow
+    
+    # Game Colors
     'success': (40, 167, 69),
     'warning': (255, 193, 7),
     'danger': (220, 53, 69),
@@ -151,7 +157,7 @@ class PenaltyBox:
         else:
             # Empty penalty box
             bg_color = COLORS['card_background']
-            text_color = COLORS['gray']
+            text_color = COLORS['text_secondary']
             border_color = COLORS['border']
         
         # Draw shadow for depth
@@ -235,10 +241,10 @@ class NumberBox:
             font = self.font_bold
             shadow_offset = 2
         else:
-            # Default state - very light background
-            bg_color = tuple(min(255, int(c * 0.15 + 255 * 0.85)) for c in base_color)
-            text_color = COLORS['dark_gray']
-            border_color = COLORS['border']
+            # Default state - dimmed version of the row color
+            bg_color = tuple(int(c * 0.15 + 30 * 0.85) for c in base_color)
+            text_color = tuple(min(255, int(c * 0.5 + 200 * 0.5)) for c in base_color)
+            border_color = tuple(int(c * 0.3 + 40 * 0.7) for c in base_color)
             border_width = 1
             font = self.font
             shadow_offset = 0
@@ -301,7 +307,8 @@ class GameGUI:
             self.number_boxes[player_id] = {}
             
             # Starting positions for each player's scoresheet
-            start_x = 50 + (player_id * 600)
+            # Player 1 at left, Player 2 push to right side
+            start_x = 50 if player_id == 0 else 790
             start_y = 150
             
             # Create boxes for each color row
@@ -328,8 +335,8 @@ class GameGUI:
             self.penalty_boxes[player_id] = []
             
             # Starting positions for each player's penalty boxes
-            start_x = 50 + (player_id * 600)
-            start_y = 320  # Below the scoresheet
+            start_x = 50 if player_id == 0 else 790
+            start_y = 340  # Lowered from 320 to avoid overlap
             
             # Create 4 penalty boxes
             for i in range(4):
@@ -458,7 +465,7 @@ class GameGUI:
         self.update_button_states(game)
         
         # Draw title
-        title_text = self.font_large.render("QWIXX", True, COLORS['black'])
+        title_text = self.font_large.render("QWIXX", True, COLORS['text'])
         self.screen.blit(title_text, (10, 10))
         
         # Draw buttons
@@ -481,8 +488,9 @@ class GameGUI:
             self.screen.blit(message_text, text_rect)
         else:
             # Normal message formatting
-            message_text = self.font_medium.render(message, True, COLORS['black'])
-            self.screen.blit(message_text, (450, 60))
+            message_text = self.font_medium.render(message, True, COLORS['text'])
+            message_rect = message_text.get_rect(center=(self.screen.get_width() // 2, 60))
+            self.screen.blit(message_text, message_rect)
         
         # Draw stage information
         self.draw_stage_info(game)
@@ -500,8 +508,10 @@ class GameGUI:
     
     def draw_stage_info(self, game) -> None:
         """Draw current stage information."""
-        start_x = 450
-        start_y = 85
+    def draw_stage_info(self, game) -> None:
+        """Draw current stage information."""
+        center_x = self.screen.get_width() // 2
+        start_y = 90
         
         game_state = game.get_state()
         if game_state == GameState.STAGE_1_MOVES:
@@ -515,23 +525,29 @@ class GameGUI:
             return  # No stage info to display
         
         stage_surface = self.font_medium.render(stage_text, True, stage_color)
-        self.screen.blit(stage_surface, (start_x, start_y))
+        stage_surface = self.font_medium.render(stage_text, True, stage_color)
+        stage_rect = stage_surface.get_rect(center=(center_x, start_y))
+        self.screen.blit(stage_surface, stage_rect)
     
     def draw_dice_results(self, dice_results: Dict[str, int], game) -> None:
         """Draw the current dice results vertically."""
-        start_x = 450
-        start_y = 115  # Moved down to make room for stage info
+    def draw_dice_results(self, dice_results: Dict[str, int], game) -> None:
+        """Draw the current dice results vertically."""
+        center_x = self.screen.get_width() // 2
+        start_y = 130  # Moved down to make room for stage info
         
         # Draw white dice
         white_text = f"White: {dice_results['white1']}, {dice_results['white2']}"
-        white_surface = self.font_medium.render(white_text, True, COLORS['black'])
-        self.screen.blit(white_surface, (start_x, start_y))
+        white_surface = self.font_medium.render(white_text, True, COLORS['text'])
+        white_rect = white_surface.get_rect(center=(center_x, start_y))
+        self.screen.blit(white_surface, white_rect)
         
         # Draw white dice sum
         white_sum = dice_results['white1'] + dice_results['white2']
         sum_text = f"Sum: {white_sum}"
-        sum_surface = self.font_medium.render(sum_text, True, COLORS['black'])
-        self.screen.blit(sum_surface, (start_x, start_y + 25))
+        sum_surface = self.font_medium.render(sum_text, True, COLORS['text'])
+        sum_rect = sum_surface.get_rect(center=(center_x, start_y + 25))
+        self.screen.blit(sum_surface, sum_rect)
         
         # Always show colored dice combinations (for Stage 2 preview)
         game_state = game.get_state()
@@ -547,14 +563,15 @@ class GameGUI:
             # Draw color label and possible sums
             color_text = f"{color.capitalize()}:"
             color_surface = self.font_medium.render(color_text, True, COLORS[color])
-            self.screen.blit(color_surface, (start_x, y_pos))
+            # Left align color name relative to center
+            self.screen.blit(color_surface, (center_x - 40, y_pos))
             
             # Draw the two possible sums prominently
             # Dim them in Stage 1 to show they're for Stage 2
-            text_color = COLORS['gray'] if game_state == GameState.STAGE_1_MOVES else COLORS['black']
+            text_color = COLORS['text_secondary'] if game_state == GameState.STAGE_1_MOVES else COLORS['text']
             sums_text = f"{white1_sum}, {white2_sum}"
             sums_surface = self.font_medium.render(sums_text, True, text_color)
-            self.screen.blit(sums_surface, (start_x + 80, y_pos))
+            self.screen.blit(sums_surface, (center_x + 30, y_pos))
     
     def draw_scoresheets(self, game) -> None:
         """Draw all players' scoresheets."""
@@ -569,7 +586,8 @@ class GameGUI:
         # Draw player name with cleaner turn indication
         if player.is_active_player():
             # Draw a subtle border around the active player's area
-            border_rect = pygame.Rect(start_x - 15, start_y - 40, 380, 250)
+            # Increased height from 250 to 280 to cover score and penalties
+            border_rect = pygame.Rect(start_x - 15, start_y - 40, 390, 280)
             pygame.draw.rect(self.screen, COLORS['red'], border_rect, 4)
             
             # Draw "ACTIVE PLAYER" indicator above the name
@@ -579,7 +597,7 @@ class GameGUI:
             name_color = COLORS['red']
             name_text = self.font_medium.render(player.get_name(), True, name_color)
         else:
-            name_color = COLORS['black']
+            name_color = COLORS['text']
             name_text = self.font_medium.render(player.get_name(), True, name_color)
         
         self.screen.blit(name_text, (start_x, start_y - 25))
@@ -595,29 +613,30 @@ class GameGUI:
                     box.draw(self.screen)
         
         # Draw penalty boxes with better positioning
-        penalty_y = start_y + (len(colors) * 40) + 10
-        penalty_label = self.font_medium.render("Penalties:", True, COLORS['black'])
+        penalty_y = start_y + (len(colors) * 40) + 25 # Increased spacing
+        penalty_label = self.font_medium.render("Penalties:", True, COLORS['text'])
         # Move the penalty label further left to prevent cutoff
-        penalty_label_x = start_x - 90 if player_id == 0 else start_x - 80
+        penalty_label_x = start_x - 90 if player_id == 0 else start_x - 90
         self.screen.blit(penalty_label, (penalty_label_x, penalty_y + 5))
         
         # Update and draw penalty boxes
         if player_id in self.penalty_boxes:
             penalties = player.get_scoresheet().penalties
             for i, penalty_box in enumerate(self.penalty_boxes[player_id]):
+                penalty_box.rect.y = penalty_y # Ensure box position matches label
                 penalty_box.set_filled(i < penalties)
                 penalty_box.draw(self.screen)
         
         # Draw total score
-        score_text = self.font_medium.render(f"Total Score: {player.get_total_score()}", True, COLORS['black'])
-        self.screen.blit(score_text, (start_x, penalty_y + 35))
+        score_text = self.font_medium.render(f"Total Score: {player.get_total_score()}", True, COLORS['text'])
+        self.screen.blit(score_text, (start_x, penalty_y + 40))
     
     def draw_final_scores(self, game) -> None:
         """Draw final scores when game is over."""
         start_y = 400
         
         # Draw "Final Scores" header
-        header_text = self.font_large.render("FINAL SCORES", True, COLORS['black'])
+        header_text = self.font_large.render("FINAL SCORES", True, COLORS['text'])
         header_rect = header_text.get_rect()
         header_rect.centerx = self.screen.get_width() // 2
         header_rect.y = start_y
@@ -637,7 +656,7 @@ class GameGUI:
                 font = self.font_medium
             else:
                 score_text = f"{i + 1}. {player.get_name()}: {player.get_total_score()} points"
-                color = COLORS['black']
+                color = COLORS['text']
                 font = self.font_medium
             
             text_surface = font.render(score_text, True, color)
