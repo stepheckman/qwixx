@@ -41,26 +41,109 @@ const Die = ({ value, color, label }) => {
     );
 };
 
-const DiceDisplay = ({ results }) => {
+const DiceDisplay = ({ results, state }) => {
     if (!results) return <Typography color="textSecondary">Roll to start</Typography>;
 
+    const whiteSum = (results.white1 || 0) + (results.white2 || 0);
+
+    const getStageName = (s) => {
+        switch (s) {
+            case 'STAGE_1_MOVES': return 'Stage 1: White Dice Sum';
+            case 'STAGE_2_MOVES': return 'Stage 2: White + Colored';
+            case 'WAITING_FOR_ROLL': return 'Waiting for Roll';
+            case 'DICE_ROLLED': return 'Dice Rolled';
+            default: return '';
+        }
+    };
+
+    const colors = [
+        { name: 'Red', key: 'red', bg: '#ef5350' },
+        { name: 'Yellow', key: 'yellow', bg: '#ffca28' },
+        { name: 'Green', key: 'green', bg: '#66bb6a' },
+        { name: 'Blue', key: 'blue', bg: '#42a5f5' }
+    ];
+
     return (
-        <Grid container spacing={2} justifyContent="center">
-            <Grid item>
-                <Box display="flex" gap={1}>
-                    <Die value={results.white1} color="white" label="W1" />
-                    <Die value={results.white2} color="white" label="W2" />
-                </Box>
+        <Box>
+
+            <Grid container spacing={1} justifyContent="center" alignItems="center">
+                <Grid item>
+                    <Box display="flex" gap={1}>
+                        <Die value={results.white1} color="white" label="W1" />
+                        <Die value={results.white2} color="white" label="W2" />
+                    </Box>
+                </Grid>
             </Grid>
-            <Grid item xs={12}>
+
+            {/* Colored Dice Row */}
+            <Box mt={1} mb={2}>
                 <Box display="flex" gap={1} justifyContent="center" flexWrap="wrap">
                     <Die value={results.red} color="red" label="R" />
                     <Die value={results.yellow} color="yellow" label="Y" />
                     <Die value={results.green} color="green" label="G" />
                     <Die value={results.blue} color="blue" label="B" />
                 </Box>
-            </Grid>
-        </Grid>
+            </Box>
+
+            {/* White Sum Box above table */}
+            <Box mb={2} display="flex" justifyContent="center">
+                <Box textAlign="center">
+                    <Paper
+                        elevation={4}
+                        sx={{
+                            width: 50,
+                            height: 50,
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            bgcolor: '#ffffff',
+                            border: '3px solid #1976d2',
+                            borderRadius: 2,
+                            mb: 0.5,
+                            fontSize: '1.5rem',
+                            fontWeight: 'bold',
+                            color: '#000',
+                            boxShadow: '0 0 10px rgba(25, 118, 210, 0.3)'
+                        }}
+                    >
+                        {whiteSum}
+                    </Paper>
+                    <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>WHITE SUM</Typography>
+                </Box>
+            </Box>
+
+            <Box mt={1}>
+                <Typography variant="caption" color="textSecondary" align="center" display="block" gutterBottom sx={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                    White + Colored Combinations
+                </Typography>
+                <Box sx={{ overflowX: 'auto', pb: 1 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+                        <thead>
+                            <tr>
+                                <th style={{ padding: '2px' }}><Typography variant="caption">W1+</Typography></th>
+                                <th style={{ padding: '2px' }}><Typography variant="caption">W2+</Typography></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {colors.map((c) => (
+                                <tr key={c.key}>
+                                    <td style={{ padding: '2px' }}>
+                                        <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
+                                            {(results.white1 || 0) + (results[c.key] || 0)}
+                                        </Paper>
+                                    </td>
+                                    <td style={{ padding: '2px' }}>
+                                        <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
+                                            {(results.white2 || 0) + (results[c.key] || 0)}
+                                        </Paper>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Box>
+            </Box>
+        </Box>
     );
 };
 

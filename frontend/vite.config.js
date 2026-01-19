@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: ['qwixx.penguin2751.net'],
     proxy: {
       '/api': {
         target: 'http://backend:7004',

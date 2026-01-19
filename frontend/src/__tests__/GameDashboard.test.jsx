@@ -56,6 +56,7 @@ describe('GameDashboard', () => {
     await user.click(startButton);
 
     expect(gameApi.setup).toHaveBeenCalledWith(1, 'medium');
-    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    // Check for "Dice" or "Stage 1" title instead of "Ready" message box
+    expect(await screen.findByText('Dice')).toBeInTheDocument();
   });
 });
