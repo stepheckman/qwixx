@@ -38,8 +38,13 @@ class GameStateSchema(BaseModel):
 
 
 class MoveRequest(BaseModel):
+    player_id: int
     color: str
     number: int
+
+
+class DoneRequest(BaseModel):
+    player_id: int
 
 
 class GameSetupRequest(BaseModel):

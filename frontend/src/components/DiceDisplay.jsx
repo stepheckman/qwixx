@@ -41,20 +41,10 @@ const Die = ({ value, color, label }) => {
     );
 };
 
-const DiceDisplay = ({ results, state }) => {
+const DiceDisplay = ({ results, state, part = 'all' }) => {
     if (!results) return <Typography color="textSecondary">Roll to start</Typography>;
 
     const whiteSum = (results.white1 || 0) + (results.white2 || 0);
-
-    const getStageName = (s) => {
-        switch (s) {
-            case 'STAGE_1_MOVES': return 'Stage 1: White Dice Sum';
-            case 'STAGE_2_MOVES': return 'Stage 2: White + Colored';
-            case 'WAITING_FOR_ROLL': return 'Waiting for Roll';
-            case 'DICE_ROLLED': return 'Dice Rolled';
-            default: return '';
-        }
-    };
 
     const colors = [
         { name: 'Red', key: 'red', bg: '#ef5350' },
@@ -63,9 +53,8 @@ const DiceDisplay = ({ results, state }) => {
         { name: 'Blue', key: 'blue', bg: '#42a5f5' }
     ];
 
-    return (
+    const renderDiceValues = () => (
         <Box>
-
             <Grid container spacing={1} justifyContent="center" alignItems="center">
                 <Grid item>
                     <Box display="flex" gap={1}>
@@ -76,7 +65,7 @@ const DiceDisplay = ({ results, state }) => {
             </Grid>
 
             {/* Colored Dice Row */}
-            <Box mt={1} mb={2}>
+            <Box mt={1}>
                 <Box display="flex" gap={1} justifyContent="center" flexWrap="wrap">
                     <Die value={results.red} color="red" label="R" />
                     <Die value={results.yellow} color="yellow" label="Y" />
@@ -84,9 +73,13 @@ const DiceDisplay = ({ results, state }) => {
                     <Die value={results.blue} color="blue" label="B" />
                 </Box>
             </Box>
+        </Box>
+    );
 
-            {/* White Sum Box above table */}
-            <Box mb={2} display="flex" justifyContent="center">
+    const renderPlayableNumbers = () => (
+        <Box>
+            {/* White Sum Box above table - ensure it's centered */}
+            <Box mb={2} display="flex" justifyContent="center" width="100%">
                 <Box textAlign="center">
                     <Paper
                         elevation={4}
@@ -103,7 +96,8 @@ const DiceDisplay = ({ results, state }) => {
                             fontSize: '1.5rem',
                             fontWeight: 'bold',
                             color: '#000',
-                            boxShadow: '0 0 10px rgba(25, 118, 210, 0.3)'
+                            boxShadow: '0 0 10px rgba(25, 118, 210, 0.3)',
+                            mx: 'auto' // ensure margin auto for centering
                         }}
                     >
                         {whiteSum}
@@ -142,6 +136,18 @@ const DiceDisplay = ({ results, state }) => {
                         </tbody>
                     </table>
                 </Box>
+            </Box>
+        </Box>
+    );
+
+    if (part === 'values') return renderDiceValues();
+    if (part === 'numbers') return renderPlayableNumbers();
+
+    return (
+        <Box>
+            {renderDiceValues()}
+            <Box mt={2}>
+                {renderPlayableNumbers()}
             </Box>
         </Box>
     );

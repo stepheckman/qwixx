@@ -13,8 +13,8 @@ export const gameApi = {
     setup: (numPlayers, aiStrategy) => client.post('/game/setup', { num_players: numPlayers, ai_strategy: aiStrategy }),
     getState: () => client.get('/game/state'),
     roll: () => client.post('/game/roll'),
-    mark: (color, number) => client.post('/game/mark', { color, number }),
-    done: () => client.post('/game/done'),
+    mark: (playerId, color, number) => client.post('/game/mark', { player_id: playerId, color, number }),
+    done: (playerId) => client.post('/game/done', { player_id: playerId }),
 };
 
 export default client;

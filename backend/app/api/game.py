@@ -6,6 +6,7 @@ from app.core.die import DieColor
 from app.schemas.game import (
     GameStateSchema,
     MoveRequest,
+    DoneRequest,
     GameSetupRequest,
     PlayerSchema,
     ScoreSheetSchema,
@@ -83,14 +84,23 @@ async def mark_number(move: MoveRequest, game: Game = Depends(get_game)):
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid color: {move.color}")
 
-    current_player = game.get_current_player()
-    if not game.try_mark_number(current_player, color, move.number):
+    # Find the player by id
+    player = next((p for p in game.players if p.get_id() == move.player_id), None)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    if not game.try_mark_number(player, color, move.number):
         raise HTTPException(status_code=400, detail="Invalid move")
 
     return format_game_state(game)
 
 
 @router.post("/done", response_model=GameStateSchema)
-async def player_done(game: Game = Depends(get_game)):
-    game.player_done_making_moves()
+async def player_done(request: DoneRequest, game: Game = Depends(get_game)):
+    # Find the player by id
+    player = next((p for p in game.players if p.get_id() == request.player_id), None)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    game.player_done_making_moves(player)
     return format_game_state(game)

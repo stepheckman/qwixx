@@ -483,14 +483,24 @@ class Game:
 
     def player_done_making_moves(self, player: Player = None) -> None:
         """Handle when a player indicates they are done making moves."""
+        if player is None:
+            player = self.get_current_player()
+
         if self.state == GameState.STAGE_1_MOVES:
-            self.stage_1_done()
+            self.stage_1_players_finished.add(player.get_id())
+            self.logger.info(
+                f"{player.get_name()} finished Stage 1 moves. ({len(self.stage_1_players_finished)}/{len(self.players)} done)"
+            )
+
+            # Check if all players are done with Stage 1
+            if len(self.stage_1_players_finished) >= len(self.players):
+                self.stage_1_done()
         elif self.state == GameState.STAGE_2_MOVES:
-            self.stage_2_done()
+            # Only rolling player can be in Stage 2
+            if player == self.get_current_player():
+                self.stage_2_done()
         elif self.state == GameState.WAITING_FOR_MOVES:
             # Legacy handling
-            if player is None:
-                player = self.get_current_player()
             self.player_finished_moves(player)
             self.message = f"{player.get_name()} is done making moves."
 
@@ -498,6 +508,8 @@ class Game:
         """Handle when Stage 1 is complete (all players done with white dice sum moves)."""
         if self.state != GameState.STAGE_1_MOVES:
             return
+
+        self.logger.info("Stage 1 complete for all players.")
 
         # Move to Stage 2 if rolling player has possible moves
         if self.has_stage_2_moves():

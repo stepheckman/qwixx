@@ -2,8 +2,9 @@ import React from 'react';
 import { Paper, Typography, Grid, Box, IconButton, Tooltip } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { Button } from '@mui/material';
 
-const ScoreSheet = ({ player, onMark, isCurrentPlayer }) => {
+const ScoreSheet = ({ player, onMark, onDone, isCurrentPlayer, gameState }) => {
     const { scoresheet, name } = player;
 
     const colors = [
@@ -29,9 +30,20 @@ const ScoreSheet = ({ player, onMark, isCurrentPlayer }) => {
                 <Typography variant="h5" color={isCurrentPlayer ? 'primary' : 'textSecondary'}>
                     {name} {isCurrentPlayer && "(Moving)"}
                 </Typography>
-                <Box display="flex" gap={2}>
-                    <Typography variant="subtitle1">Score: {scoresheet.total_score}</Typography>
-                    <Typography variant="subtitle1" color="error">Penalties: {scoresheet.penalties}</Typography>
+                <Box display="flex" alignItems="center" gap={2}>
+                    <Button
+                        variant="contained"
+                        size="small"
+                        onClick={onDone}
+                        disabled={!['STAGE_1_MOVES', 'STAGE_2_MOVES'].includes(gameState)}
+                        sx={{ height: 32 }}
+                    >
+                        Done
+                    </Button>
+                    <Box display="flex" gap={2}>
+                        <Typography variant="subtitle1">Score: {scoresheet.total_score}</Typography>
+                        <Typography variant="subtitle1" color="error">Penalties: {scoresheet.penalties}</Typography>
+                    </Box>
                 </Box>
             </Box>
 
@@ -68,7 +80,11 @@ const ScoreSheet = ({ player, onMark, isCurrentPlayer }) => {
                                         key={num}
                                         size="small"
                                         onClick={() => onMark(color.name, num)}
-                                        disabled={!isCurrentPlayer || isMarked || isUnplayable}
+                                        disabled={
+                                            (gameState === 'STAGE_1_MOVES' ? false : !isCurrentPlayer) ||
+                                            isMarked ||
+                                            isUnplayable
+                                        }
                                         sx={{
                                             width: 36,
                                             height: 36,
@@ -104,7 +120,24 @@ const ScoreSheet = ({ player, onMark, isCurrentPlayer }) => {
                             })}
                         </Box>
                         <Box sx={{ ml: 1, mr: 1, display: 'flex', alignItems: 'center' }}>
-                            {/* Row Lock Indicator could go here */}
+                            <Box
+                                sx={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: '50%',
+                                    bgcolor: 'rgba(255,255,255,0.3)',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    color: '#000',
+                                    border: '1px solid rgba(0,0,0,0.2)'
+                                }}
+                                title="Checked boxes count"
+                            >
+                                {markedIndices.length}
+                            </Box>
                         </Box>
                     </Box>
                 );

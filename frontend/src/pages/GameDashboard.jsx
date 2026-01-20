@@ -47,18 +47,18 @@ const GameDashboard = () => {
         }
     };
 
-    const handleMark = async (color, number) => {
+    const handleMark = async (playerId, color, number) => {
         try {
-            const response = await gameApi.mark(color, number);
+            const response = await gameApi.mark(playerId, color, number);
             setGameState(response.data);
         } catch (err) {
             setError(err.response?.data?.detail || 'Invalid move');
         }
     };
 
-    const handleDone = async () => {
+    const handleDone = async (playerId) => {
         try {
-            const response = await gameApi.done();
+            const response = await gameApi.done(playerId);
             setGameState(response.data);
         } catch (err) {
             setError('Failed to finish turn');
@@ -96,43 +96,68 @@ const GameDashboard = () => {
                         <ScoreSheet
                             key={player.id}
                             player={player}
-                            onMark={handleMark}
+                            onMark={(color, num) => handleMark(player.id, color, num)}
+                            onDone={() => handleDone(player.id)}
                             isCurrentPlayer={gameState.players[gameState.current_player_index].id === player.id}
+                            gameState={gameState.state}
                         />
                     ))}
                 </Grid>
 
                 <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2, position: 'sticky', top: 20 }}>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                                {gameState.state.includes('STAGE_1') ? 'Stage 1' :
-                                    gameState.state.includes('STAGE_2') ? 'Stage 2' : 'Dice'}
-                            </Typography>
-                            <Box display="flex" gap={1}>
-                                <Button
-                                    variant="contained"
-                                    size="small"
-                                    onClick={handleRoll}
-                                    disabled={gameState.state !== 'WAITING_FOR_ROLL'}
-                                    sx={{ minWidth: 'unset', px: 2 }}
-                                >
-                                    Roll
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={handleDone}
-                                    disabled={!['STAGE_1_MOVES', 'STAGE_2_MOVES'].includes(gameState.state)}
-                                    sx={{ minWidth: 'unset', px: 2 }}
-                                >
-                                    Done
-                                </Button>
+                    <Box sx={{ position: 'sticky', top: 20 }}>
+                        {/* Dice Values Box */}
+                        <Paper sx={{ p: 2, mb: 2 }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+                                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                                    {gameState.state.includes('STAGE_1') ? 'Stage 1' :
+                                        gameState.state.includes('STAGE_2') ? 'Stage 2' : 'Dice'}
+                                </Typography>
+                                <Box display="flex" gap={1}>
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={handleRoll}
+                                        disabled={gameState.state !== 'WAITING_FOR_ROLL'}
+                                        sx={{ minWidth: 'unset', px: 2 }}
+                                    >
+                                        Roll
+                                    </Button>
+                                </Box>
                             </Box>
-                        </Box>
 
-                        <DiceDisplay results={gameState.dice_results} state={gameState.state} />
-                    </Paper>
+                            <DiceDisplay results={gameState.dice_results} state={gameState.state} part="values" />
+                        </Paper>
+
+                        {/* Playable Numbers Box */}
+                        <Paper sx={{ p: 2, mb: 2 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
+                                Playable Numbers
+                            </Typography>
+                            <DiceDisplay results={gameState.dice_results} state={gameState.state} part="numbers" />
+                        </Paper>
+
+                        {/* New Game Button */}
+                        <Button
+                            variant="outlined"
+                            fullWidth
+                            onClick={handleSetup}
+                            sx={{
+                                borderStyle: 'dashed',
+                                py: 1.5,
+                                fontWeight: 'bold',
+                                color: 'text.secondary',
+                                borderColor: 'divider',
+                                '&:hover': {
+                                    borderColor: 'primary.main',
+                                    color: 'primary.main',
+                                    bgcolor: 'transparent'
+                                }
+                            }}
+                        >
+                            + New Game
+                        </Button>
+                    </Box>
                 </Grid>
             </Grid>
         </Container>
