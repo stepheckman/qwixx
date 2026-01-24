@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Button, Box, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Container, Grid, Paper, Typography, Button, Box, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Link } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+
 import { gameApi } from '../api/client';
 import ScoreSheet from '../components/ScoreSheet';
 import DiceDisplay from '../components/DiceDisplay';
 
 const GameDashboard = () => {
     const [gameState, setGameState] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     const fetchGameState = async () => {
+        setLoading(true);
         try {
             const response = await gameApi.getState();
             setGameState(response.data);
@@ -22,9 +25,8 @@ const GameDashboard = () => {
         }
     };
 
-    useEffect(() => {
-        fetchGameState();
-    }, []);
+    // Removed useEffect to fetch state on mount so it always starts at opening screen
+
 
     const [setupOptions, setSetupOptions] = useState({
         numPlayers: 1,
@@ -187,6 +189,7 @@ const GameDashboard = () => {
                         borderRadius: 2,
                         bgcolor: '#ef5350',
                         color: 'white',
+                        mb: 3,
                         '&:hover': {
                             bgcolor: '#d32f2f'
                         }
@@ -194,23 +197,43 @@ const GameDashboard = () => {
                 >
                     Start Game
                 </Button>
+
+                <Box sx={{ mt: 2 }}>
+                    <Link
+                        href="/QwixxTM-RULES.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                            color: 'white',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            opacity: 0.8,
+                            '&:hover': {
+                                opacity: 1,
+                                textDecoration: 'underline'
+                            }
+                        }}
+                    >
+                        <HelpOutlineIcon sx={{ mr: 1, fontSize: '1.1rem' }} />
+                        How to Play / Instructions
+                    </Link>
+                </Box>
             </Paper>
         </Container>
+
     );
 
     return (
         <Container maxWidth="lg">
             {/* Header / Message Area */}
-            <Box sx={{ mb: 3 }}>
-                {error && (
-                    <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>
-                )}
-
+            <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'stretch' }}>
                 {gameState.message && (
                     <Paper
                         elevation={0}
                         sx={{
                             p: 2,
+                            flex: 1,
                             textAlign: 'center',
                             background: 'rgba(255, 255, 255, 0.05)',
                             backdropFilter: 'blur(10px)',
@@ -224,7 +247,46 @@ const GameDashboard = () => {
                         </Typography>
                     </Paper>
                 )}
+
+                <Paper
+                    elevation={0}
+                    sx={{
+                        px: 3,
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: 2,
+                    }}
+                >
+                    <Link
+                        href="/QwixxTM-RULES.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                            color: 'white',
+                            textDecoration: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: 0.7,
+                            fontSize: '0.9rem',
+                            '&:hover': {
+                                opacity: 1,
+                                color: 'primary.light'
+                            }
+                        }}
+                    >
+                        <HelpOutlineIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                        Instructions
+                    </Link>
+                </Paper>
             </Box>
+
+            {error && (
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>
+            )}
+
 
             <Grid container spacing={3}>
 
