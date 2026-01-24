@@ -2,7 +2,7 @@
 Main Game class for the Qwixx game.
 """
 
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict
 
 from .player import Player
 from .ai_player import AIPlayer
@@ -180,7 +180,9 @@ class Game:
             self.stage_1_players_finished.clear()
             self.rolling_player_made_stage_1_move = False
             white_sum = self.dice_results["white1"] + self.dice_results["white2"]
-            self.message = f"Stage 1: All players can mark using white dice sum ({white_sum}). Click 'Done' when finished."
+            self.message = (
+                f"Stage 1: All players can mark using white dice sum ({white_sum})."
+            )
 
             self.logger.info(f"Stage 1 started - white dice sum: {white_sum}")
         else:
@@ -194,7 +196,7 @@ class Game:
 
                 self.stage_2_rolling_player_finished = False
                 self.rolling_player_made_stage_2_move = False
-                self.message = f"Stage 2: {current_player.get_name()} can mark using white + colored combinations. Click 'Done' when finished."
+                self.message = f"Stage 2: {current_player.get_name()} can mark using white + colored combinations."
 
                 self.logger.info(f"Stage 2 started for {current_player.get_name()}")
             else:
@@ -305,8 +307,9 @@ class Game:
 
         # Mark the number
         if player.get_scoresheet().mark_number(color, number):
-            # Record the move type for tracking
-            white_sum = self.dice_results["white1"] + self.dice_results["white2"]
+            white_sum = 0
+            if self.dice_results:
+                white_sum = self.dice_results["white1"] + self.dice_results["white2"]
             move_type = "unknown"
             stage = 0
 
@@ -361,7 +364,6 @@ class Game:
                     self.locked_colors.add(color)
                     self.message = f"{player.get_name()} locked the {color.value} row!"
 
-                    # Log row locking
                     self.logger.info(
                         f"{player.get_name()} locked the {color.value} row!"
                     )
@@ -373,6 +375,9 @@ class Game:
                         locked_colors_count=len(self.locked_colors),
                         total_locked_colors=list(c.value for c in self.locked_colors),
                     )
+
+            # After marking a number, the player is done with their moves for the current stage
+            self.player_done_making_moves(player)
 
             return True
 
@@ -481,7 +486,7 @@ class Game:
         if self.state != GameState.GAME_OVER:
             self.next_player()
 
-    def player_done_making_moves(self, player: Player = None) -> None:
+    def player_done_making_moves(self, player: Optional[Player] = None) -> None:
         """Handle when a player indicates they are done making moves."""
         if player is None:
             player = self.get_current_player()
@@ -516,7 +521,7 @@ class Game:
             self.state = GameState.STAGE_2_MOVES
             self.stage_2_rolling_player_finished = False
             current_player = self.get_current_player()
-            self.message = f"Stage 2: {current_player.get_name()} can mark using white + colored combinations. Click 'Done' when finished."
+            self.message = f"Stage 2: {current_player.get_name()} can mark using white + colored combinations."
         else:
             # No Stage 2 moves, end turn with penalty check
             self.end_stage_based_turn()
@@ -575,94 +580,91 @@ class Game:
 
         return max(self.players, key=lambda p: p.get_total_score())
 
-    def update(self) -> None:
-        """Update game state."""
-        # Handle AI player moves
-        self.handle_ai_moves()
-
     def handle_ai_moves(self) -> None:
-        """Handle AI player decision making."""
-        current_player = self.get_current_player()
+        """Process all AI players' decisions automatically until it's a human's turn."""
+        # Process moves in a loop to handle sequential states (e.g. Stage 1 -> Stage 2)
+        max_iterations = 20
+        iterations = 0
 
-        # Only process AI moves if it's an AI player's turn and in appropriate states
-        if not hasattr(current_player, "is_ai") or not current_player.is_ai:
-            return
+        while iterations < max_iterations:
+            iterations += 1
+            game_state = self.get_state()
+            current_player = self.get_current_player()
 
-        game_state = self.get_state()
-
-        # Handle AI moves based on game state
-        if game_state == GameState.WAITING_FOR_ROLL:
-            # AI should roll dice automatically after a short delay
-            self.ai_move_timer += 1
-            if self.ai_move_timer >= self.ai_move_delay:
-                self.roll_dice()
-                self.ai_move_timer = 0
-
-        elif game_state == GameState.STAGE_1_MOVES:
-            # AI decides whether to make a move in stage 1
-            self.ai_move_timer += 1
-            if (
-                self.ai_move_timer >= self.ai_move_delay // 2
-            ):  # Faster for move decisions
-                self.handle_ai_stage_1_move()
-                self.ai_move_timer = 0
-
-        elif game_state == GameState.STAGE_2_MOVES:
-            # AI decides whether to make a move in stage 2 (only if it's the rolling player)
-            if current_player == self.get_current_player():
-                self.ai_move_timer += 1
-                if self.ai_move_timer >= self.ai_move_delay // 2:
-                    self.handle_ai_stage_2_move()
-                    self.ai_move_timer = 0
-
-    def handle_ai_stage_1_move(self) -> None:
-        """Handle AI decision making for stage 1 moves."""
-        # Check if any AI players want to make moves
-        ai_players_to_process = []
-
-        for player in self.players:
-            if (
-                hasattr(player, "is_ai")
-                and player.is_ai
-                and player.get_id() not in self.stage_1_players_finished
+            # 1. Active player is AI and needs to roll
+            if game_state == GameState.WAITING_FOR_ROLL and getattr(
+                current_player, "is_ai", False
             ):
-                ai_players_to_process.append(player)
+                self.roll_dice()
+                continue
 
-        # Process one AI player at a time
-        if ai_players_to_process:
-            ai_player = ai_players_to_process[0]
-            available_moves = ai_player.get_available_moves(self)
+            # 2. Stage 1: Any AI players who haven't finished
+            if game_state == GameState.STAGE_1_MOVES:
+                ai_processed = False
+                # Use a copy of players list to avoid modification issues if any
+                for player in self.players:
+                    if (
+                        getattr(player, "is_ai", False)
+                        and player.get_id() not in self.stage_1_players_finished
+                    ):
+                        self._process_single_ai_stage_1(player)
+                        ai_processed = True
 
-            if available_moves and ai_player.should_make_move_in_stage(self, 1):
-                move = ai_player.make_move_decision(self, available_moves)
-                if move:
-                    color, number = move
-                    if self.try_mark_number(ai_player, color, number):
-                        self.message = f"{ai_player.get_name()} marked {number} in {color.value} row."
+                # In 1-player mode, if human has no Stage 1 moves, finish for them
+                if self.num_players == 1:
+                    human = self.players[0]
+                    if human.get_id() not in self.stage_1_players_finished:
+                        if not self.can_player_move_in_stage(human, 1):
+                            self.player_done_making_moves(human)
+                            ai_processed = True
 
-            # Mark this AI player as finished with stage 1
-            self.stage_1_players_finished.add(ai_player.get_id())
+                if ai_processed:
+                    continue
+                else:
+                    break  # Wait for human Stage 1 moves
 
-            # Check if all players are done with stage 1
-            if len(self.stage_1_players_finished) >= len(self.players):
-                self.stage_1_done()
+            # 3. Stage 2: Active player is AI and needs to move
+            if game_state == GameState.STAGE_2_MOVES and getattr(
+                current_player, "is_ai", False
+            ):
+                self._process_single_ai_stage_2(current_player)
+                continue
 
-    def handle_ai_stage_2_move(self) -> None:
-        """Handle AI decision making for stage 2 moves."""
-        current_player = self.get_current_player()
+            # In 1-player mode, if human is active and has no Stage 2 moves, finish for them
+            if self.num_players == 1 and game_state == GameState.STAGE_2_MOVES:
+                human = self.players[0]
+                if human == current_player and not self.can_player_move_in_stage(
+                    human, 2
+                ):
+                    self.player_done_making_moves(human)
+                    continue
 
-        if hasattr(current_player, "is_ai") and current_player.is_ai:
-            available_moves = current_player.get_available_moves(self)
+            # If no AI actions or automatic human actions can be taken, stop
+            break
 
-            if available_moves and current_player.should_make_move_in_stage(self, 2):
-                move = current_player.make_move_decision(self, available_moves)
-                if move:
-                    color, number = move
-                    if self.try_mark_number(current_player, color, number):
-                        self.message = f"{current_player.get_name()} marked {number} in {color.value} row."
+    def _process_single_ai_stage_1(self, ai_player) -> None:
+        """Handle decision for a single AI player in Stage 1."""
+        available_moves = ai_player.get_available_moves(self)
+        if available_moves and ai_player.should_make_move_in_stage(self, 1):
+            move = ai_player.make_move_decision(self, available_moves)
+            if move:
+                color, number = move
+                self.try_mark_number(ai_player, color, number)
 
-            # AI is done with stage 2
-            self.stage_2_done()
+        # Always mark as finished even if no move was made
+        self.player_done_making_moves(ai_player)
+
+    def _process_single_ai_stage_2(self, ai_player) -> None:
+        """Handle decision for a single AI player in Stage 2."""
+        available_moves = ai_player.get_available_moves(self)
+        if available_moves and ai_player.should_make_move_in_stage(self, 2):
+            move = ai_player.make_move_decision(self, available_moves)
+            if move:
+                color, number = move
+                self.try_mark_number(ai_player, color, number)
+
+        # Always mark as finished
+        self.player_done_making_moves(ai_player)
 
     def get_state(self) -> GameState:
         """Get the current game state."""
@@ -683,3 +685,25 @@ class Game:
     def get_locked_colors(self) -> set:
         """Get the set of locked colors."""
         return self.locked_colors
+
+    def can_player_move_in_stage(self, player: Player, stage: int) -> bool:
+        """Check if a player has ANY valid moves in the given stage."""
+        if not self.dice_results:
+            return False
+
+        if stage == 1:
+            white_sum = self.dice_results["white1"] + self.dice_results["white2"]
+            for color in DieColor:
+                if color not in self.locked_colors:
+                    if player.get_scoresheet().can_mark_number(color, white_sum):
+                        return True
+        elif stage == 2:
+            if player != self.get_current_player():
+                return False
+            white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+            for color, sums in white_colored_sums.items():
+                if color not in self.locked_colors:
+                    for s in sums:
+                        if player.get_scoresheet().can_mark_number(color, s):
+                            return True
+        return False

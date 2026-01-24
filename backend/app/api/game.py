@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
 from typing import Optional
 from app.core.game import Game
 from app.core.die import DieColor
@@ -74,6 +73,7 @@ async def get_state(game: Game = Depends(get_game)):
 @router.post("/roll", response_model=GameStateSchema)
 async def roll_dice(game: Game = Depends(get_game)):
     game.roll_dice()
+    game.handle_ai_moves()
     return format_game_state(game)
 
 
@@ -92,6 +92,7 @@ async def mark_number(move: MoveRequest, game: Game = Depends(get_game)):
     if not game.try_mark_number(player, color, move.number):
         raise HTTPException(status_code=400, detail="Invalid move")
 
+    game.handle_ai_moves()
     return format_game_state(game)
 
 
@@ -103,4 +104,5 @@ async def player_done(request: DoneRequest, game: Game = Depends(get_game)):
         raise HTTPException(status_code=404, detail="Player not found")
 
     game.player_done_making_moves(player)
+    game.handle_ai_moves()
     return format_game_state(game)

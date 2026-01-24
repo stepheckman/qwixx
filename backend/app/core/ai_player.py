@@ -89,8 +89,8 @@ class AIPlayer(Player):
     def _make_easy_decision(
         self, available_moves: List[Tuple[DieColor, int]]
     ) -> Optional[Tuple[DieColor, int]]:
-        """Easy AI: Random selection with 70% chance to make a move."""
-        if random.random() < 0.3:  # 30% chance to skip
+        """Easy AI: Random selection with 50% chance to make a move (less aggressive)."""
+        if random.random() < 0.5:  # 50% chance to skip
             return None
         return random.choice(available_moves)
 
@@ -123,7 +123,7 @@ class AIPlayer(Player):
     def _make_hard_decision(
         self, game, available_moves: List[Tuple[DieColor, int]]
     ) -> Optional[Tuple[DieColor, int]]:
-        """Hard AI: Advanced strategy with look-ahead."""
+        """Hard AI: Advanced strategy with very high consistency."""
         if not available_moves:
             return None
 
@@ -134,19 +134,11 @@ class AIPlayer(Player):
             score = self._evaluate_move_advanced(game, color, number)
             scored_moves.append((score, color, number))
 
-        # Sort by score (highest first) - only compare the score (first element)
+        # Sort by score (highest first)
         scored_moves.sort(key=lambda x: x[0], reverse=True)
 
-        # 95% chance to pick the best move
-        if random.random() < 0.95:
-            return (scored_moves[0][1], scored_moves[0][2])
-        else:
-            # Small chance for suboptimal play to avoid being too predictable
-            return (
-                (scored_moves[0][1], scored_moves[0][2])
-                if len(scored_moves) == 1
-                else (scored_moves[1][1], scored_moves[1][2])
-            )
+        # 100% chance to pick the best move for Hard mode
+        return (scored_moves[0][1], scored_moves[0][2])
 
     def _evaluate_move(self, game, color: DieColor, number: int) -> float:
         """

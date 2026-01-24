@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Button, Box, Alert, CircularProgress } from '@mui/material';
+import { Container, Grid, Paper, Typography, Button, Box, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { gameApi } from '../api/client';
 import ScoreSheet from '../components/ScoreSheet';
 import DiceDisplay from '../components/DiceDisplay';
@@ -26,10 +26,15 @@ const GameDashboard = () => {
         fetchGameState();
     }, []);
 
+    const [setupOptions, setSetupOptions] = useState({
+        numPlayers: 1,
+        aiStrategy: 'easy'
+    });
+
     const handleSetup = async () => {
         setLoading(true);
         try {
-            const response = await gameApi.setup(1, 'medium');
+            const response = await gameApi.setup(setupOptions.numPlayers, setupOptions.aiStrategy);
             setGameState(response.data);
         } catch (err) {
             setError('Failed to setup game');
@@ -73,10 +78,121 @@ const GameDashboard = () => {
 
     if (!gameState) return (
         <Container maxWidth="md">
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h4" gutterBottom>Qwixx</Typography>
-                <Button variant="contained" color="primary" onClick={handleSetup} size="large">
-                    Start New Game
+            <Paper sx={{
+                p: 4,
+                textAlign: 'center',
+                mt: 8,
+                background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 100%)',
+                color: 'white',
+                borderRadius: 4,
+                boxShadow: 10
+            }}>
+                <Typography variant="h2" gutterBottom sx={{ fontWeight: 'bold', mb: 4 }}>Qwixx</Typography>
+
+                <Box sx={{ mb: 4, textAlign: 'left', maxWidth: 400, mx: 'auto' }}>
+                    <Typography variant="h6" gutterBottom>Number of Players</Typography>
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={6}>
+                            <Button
+                                fullWidth
+                                variant={setupOptions.numPlayers === 1 ? "contained" : "outlined"}
+                                onClick={() => setSetupOptions({ ...setupOptions, numPlayers: 1 })}
+                                sx={{
+                                    color: 'white',
+                                    borderColor: 'white',
+                                    bgcolor: setupOptions.numPlayers === 1 ? '#42a5f5' : 'transparent',
+                                    '&:hover': {
+                                        bgcolor: setupOptions.numPlayers === 1 ? '#1e88e5' : 'rgba(255,255,255,0.1)',
+                                        borderColor: 'white'
+                                    }
+                                }}
+                            >
+                                1 Player
+                            </Button>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Button
+                                fullWidth
+                                variant={setupOptions.numPlayers === 2 ? "contained" : "outlined"}
+                                onClick={() => setSetupOptions({ ...setupOptions, numPlayers: 2 })}
+                                sx={{
+                                    color: 'white',
+                                    borderColor: 'white',
+                                    bgcolor: setupOptions.numPlayers === 2 ? '#ffca28' : 'transparent',
+                                    '&:hover': {
+                                        bgcolor: setupOptions.numPlayers === 2 ? '#ffb300' : 'rgba(255,255,255,0.1)',
+                                        borderColor: 'white'
+                                    }
+                                }}
+                            >
+                                2 Players
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    {setupOptions.numPlayers === 1 && (
+                        <>
+                            <Typography variant="h6" gutterBottom>AI Difficulty</Typography>
+                            <Grid container spacing={2}>
+                                <Grid item xs={6}>
+                                    <Button
+                                        fullWidth
+                                        variant={setupOptions.aiStrategy === 'easy' ? "contained" : "outlined"}
+                                        onClick={() => setSetupOptions({ ...setupOptions, aiStrategy: 'easy' })}
+                                        sx={{
+                                            color: 'white',
+                                            borderColor: 'white',
+                                            bgcolor: setupOptions.aiStrategy === 'easy' ? '#66bb6a' : 'transparent',
+                                            '&:hover': {
+                                                bgcolor: setupOptions.aiStrategy === 'easy' ? '#43a047' : 'rgba(255,255,255,0.1)',
+                                                borderColor: 'white'
+                                            }
+                                        }}
+                                    >
+                                        Easy
+                                    </Button>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Button
+                                        fullWidth
+                                        variant={setupOptions.aiStrategy === 'hard' ? "contained" : "outlined"}
+                                        onClick={() => setSetupOptions({ ...setupOptions, aiStrategy: 'hard' })}
+                                        sx={{
+                                            color: 'white',
+                                            borderColor: 'white',
+                                            bgcolor: setupOptions.aiStrategy === 'hard' ? '#ef5350' : 'transparent',
+                                            '&:hover': {
+                                                bgcolor: setupOptions.aiStrategy === 'hard' ? '#e53935' : 'rgba(255,255,255,0.1)',
+                                                borderColor: 'white'
+                                            }
+                                        }}
+                                    >
+                                        Hard
+                                    </Button>
+                                </Grid>
+                            </Grid>
+                        </>
+                    )}
+                </Box>
+
+                <Button
+                    variant="contained"
+                    onClick={handleSetup}
+                    size="large"
+                    sx={{
+                        px: 6,
+                        py: 1.5,
+                        fontSize: '1.2rem',
+                        fontWeight: 'bold',
+                        borderRadius: 2,
+                        bgcolor: '#ef5350',
+                        color: 'white',
+                        '&:hover': {
+                            bgcolor: '#d32f2f'
+                        }
+                    }}
+                >
+                    Start Game
                 </Button>
             </Paper>
         </Container>
@@ -84,13 +200,36 @@ const GameDashboard = () => {
 
     return (
         <Container maxWidth="lg">
-            <Grid container spacing={3}>
+            {/* Header / Message Area */}
+            <Box sx={{ mb: 3 }}>
                 {error && (
-                    <Grid item xs={12}>
-                        <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>
-                    </Grid>
+                    <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>
                 )}
 
+                {gameState.message && (
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 2,
+                            textAlign: 'center',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            backdropFilter: 'blur(10px)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: 2,
+                            color: 'white'
+                        }}
+                    >
+                        <Typography variant="h5" sx={{ fontWeight: 500 }}>
+                            {gameState.message}
+                        </Typography>
+                    </Paper>
+                )}
+            </Box>
+
+            <Grid container spacing={3}>
+
+
+                {/* Main Content - Scoresheets */}
                 <Grid item xs={12} md={8}>
                     {gameState.players.map((player) => (
                         <ScoreSheet
@@ -104,6 +243,7 @@ const GameDashboard = () => {
                     ))}
                 </Grid>
 
+                {/* Sidebar - Dice and Actions */}
                 <Grid item xs={12} md={4}>
                     <Box sx={{ position: 'sticky', top: 20 }}>
                         {/* Dice Values Box */}
@@ -126,7 +266,12 @@ const GameDashboard = () => {
                                 </Box>
                             </Box>
 
-                            <DiceDisplay results={gameState.dice_results} state={gameState.state} part="values" />
+                            <DiceDisplay
+                                results={gameState.dice_results}
+                                state={gameState.state}
+                                part="values"
+                                isActivePlayerAi={gameState.players[gameState.current_player_index].is_ai}
+                            />
                         </Paper>
 
                         {/* Playable Numbers Box */}
@@ -134,24 +279,28 @@ const GameDashboard = () => {
                             <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
                                 Playable Numbers
                             </Typography>
-                            <DiceDisplay results={gameState.dice_results} state={gameState.state} part="numbers" />
+                            <DiceDisplay
+                                results={gameState.dice_results}
+                                state={gameState.state}
+                                part="numbers"
+                                isActivePlayerAi={gameState.players[gameState.current_player_index].is_ai}
+                            />
                         </Paper>
 
-                        {/* New Game Button */}
                         <Button
-                            variant="outlined"
+                            variant="contained"
                             fullWidth
-                            onClick={handleSetup}
+                            onClick={() => setGameState(null)}
                             sx={{
-                                borderStyle: 'dashed',
                                 py: 1.5,
                                 fontWeight: 'bold',
+                                bgcolor: 'rgba(255,255,255,0.05)',
                                 color: 'text.secondary',
-                                borderColor: 'divider',
+                                border: '1px dashed rgba(255,255,255,0.2)',
                                 '&:hover': {
-                                    borderColor: 'primary.main',
+                                    bgcolor: 'rgba(255,255,255,0.1)',
                                     color: 'primary.main',
-                                    bgcolor: 'transparent'
+                                    borderColor: 'primary.main'
                                 }
                             }}
                         >
@@ -160,6 +309,62 @@ const GameDashboard = () => {
                     </Box>
                 </Grid>
             </Grid>
+
+            {/* Game Over Dialog */}
+            <Dialog
+                open={gameState.state === 'GAME_OVER'}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 4,
+                        background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 100%)',
+                        color: 'white',
+                        p: 2
+                    }
+                }}
+            >
+                <DialogTitle sx={{ textAlign: 'center', fontSize: '2.5rem', fontWeight: 'bold' }}>
+                    Game Over!
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="h5" align="center" gutterBottom sx={{ mb: 4 }}>
+                        {gameState.message}
+                    </Typography>
+
+                    <Box sx={{ bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 2, p: 3 }}>
+                        <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid rgba(255,255,255,0.3)', pb: 1, mb: 2 }}>
+                            Final Scores
+                        </Typography>
+                        {gameState.players.map((player) => (
+                            <Box key={player.id} display="flex" justifyContent="space-between" mb={1}>
+                                <Typography variant="body1" sx={{ fontWeight: player.is_active ? 'bold' : 'normal' }}>
+                                    {player.name} {player.is_ai ? '(AI)' : ''}
+                                </Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                                    {player.scoresheet.total_score} pts
+                                </Typography>
+                            </Box>
+                        ))}
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ justifyContent: 'center', pb: 4 }}>
+                    <Button
+                        variant="contained"
+                        onClick={() => setGameState(null)}
+                        size="large"
+                        sx={{
+                            bgcolor: '#ef5350',
+                            color: 'white',
+                            px: 6,
+                            fontWeight: 'bold',
+                            '&:hover': { bgcolor: '#d32f2f' }
+                        }}
+                    >
+                        Play Again
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 };

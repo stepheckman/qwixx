@@ -7,15 +7,27 @@ from app.core.die import DieColor
 class TestStage1Logic(unittest.TestCase):
     def setUp(self):
         self.game = Game(num_players=2)
+
         # Manually set up dice for predictable testing
-        self.game.dice_roller.roll_all = lambda: {
-            "white1": 3,
-            "white2": 4,
-            "red": 1,
-            "yellow": 1,
-            "green": 1,
-            "blue": 1,
-        }
+        def mock_roll_all():
+            results = {
+                "white1": 3,
+                "white2": 4,
+                "red": 1,
+                "yellow": 1,
+                "green": 1,
+                "blue": 1,
+            }
+            # Also update internal dice values so get_white_plus_colored_sums works correctly
+            self.game.dice_roller.white_dice[0].value = 3
+            self.game.dice_roller.white_dice[1].value = 4
+            self.game.dice_roller.colored_dice[0].value = 1
+            self.game.dice_roller.colored_dice[1].value = 1
+            self.game.dice_roller.colored_dice[2].value = 1
+            self.game.dice_roller.colored_dice[3].value = 1
+            return results
+
+        self.game.dice_roller.roll_all = mock_roll_all
 
     def test_stage_1_waits_for_both_players(self):
         """Test that Stage 1 doesn't end until both players are done."""

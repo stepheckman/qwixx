@@ -25,21 +25,23 @@ const ScoreSheet = ({ player, onMark, onDone, isCurrentPlayer, gameState }) => {
     };
 
     return (
-        <Paper sx={{ p: 2, mb: 3, opacity: isCurrentPlayer ? 1 : 0.7 }}>
+        <Paper sx={{ p: 2, mb: 3, opacity: isCurrentPlayer ? 1 : 0.9 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h5" color={isCurrentPlayer ? 'primary' : 'textSecondary'}>
                     {name} {isCurrentPlayer && "(Moving)"}
                 </Typography>
                 <Box display="flex" alignItems="center" gap={2}>
-                    <Button
-                        variant="contained"
-                        size="small"
-                        onClick={onDone}
-                        disabled={!['STAGE_1_MOVES', 'STAGE_2_MOVES'].includes(gameState)}
-                        sx={{ height: 32 }}
-                    >
-                        Done
-                    </Button>
+                    {!player.is_ai && (
+                        <Button
+                            variant="contained"
+                            size="small"
+                            onClick={onDone}
+                            disabled={!['STAGE_1_MOVES', 'STAGE_2_MOVES'].includes(gameState)}
+                            sx={{ height: 32 }}
+                        >
+                            Skip Stage
+                        </Button>
+                    )}
                     <Box display="flex" gap={2}>
                         <Typography variant="subtitle1">Score: {scoresheet.total_score}</Typography>
                         <Typography variant="subtitle1" color="error">Penalties: {scoresheet.penalties}</Typography>
@@ -81,6 +83,7 @@ const ScoreSheet = ({ player, onMark, onDone, isCurrentPlayer, gameState }) => {
                                         size="small"
                                         onClick={() => onMark(color.name, num)}
                                         disabled={
+                                            player.is_ai ||
                                             (gameState === 'STAGE_1_MOVES' ? false : !isCurrentPlayer) ||
                                             isMarked ||
                                             isUnplayable
@@ -88,12 +91,12 @@ const ScoreSheet = ({ player, onMark, onDone, isCurrentPlayer, gameState }) => {
                                         sx={{
                                             width: 36,
                                             height: 36,
-                                            bgcolor: isMarked ? 'rgba(0,0,0,0.5)' :
-                                                isUnplayable ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)',
+                                            bgcolor: isMarked ? 'rgba(0,0,0,0.8)' :
+                                                isUnplayable ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
                                             color: isMarked ? '#fff' :
-                                                isUnplayable ? 'rgba(0,0,0,0.3)' : '#000',
+                                                isUnplayable ? 'rgba(0,0,0,0.5)' : '#000',
                                             textDecoration: isUnplayable ? 'line-through' : 'none',
-                                            opacity: isUnplayable ? 0.3 : 1,
+                                            opacity: 1, // Control visibility via rgba instead of overall element opacity
                                             '&:hover': {
                                                 bgcolor: isUnplayable ? 'transparent' : 'rgba(0,0,0,0.3)',
                                             },
@@ -107,7 +110,7 @@ const ScoreSheet = ({ player, onMark, onDone, isCurrentPlayer, gameState }) => {
                                                 position: 'absolute',
                                                 width: '100%',
                                                 height: '2px',
-                                                bgcolor: 'rgba(0,0,0,0.4)',
+                                                bgcolor: 'rgba(0,0,0,0.6)',
                                                 transform: 'rotate(-45deg)',
                                                 top: '50%',
                                                 left: 0

@@ -52,10 +52,10 @@ describe('GameDashboard', () => {
 
     render(<GameDashboard />);
 
-    const startButton = await screen.findByRole('button', { name: /start new game/i });
+    const startButton = await screen.findByRole('button', { name: /start game/i });
     await user.click(startButton);
 
-    expect(gameApi.setup).toHaveBeenCalledWith(1, 'medium');
+    expect(gameApi.setup).toHaveBeenCalledWith(1, 'easy');
     // Check for "Dice" or "Stage 1" title instead of "Ready" message box
     expect(await screen.findByText('Dice')).toBeInTheDocument();
   });

@@ -41,7 +41,7 @@ const Die = ({ value, color, label }) => {
     );
 };
 
-const DiceDisplay = ({ results, state, part = 'all' }) => {
+const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
     if (!results) return <Typography color="textSecondary">Roll to start</Typography>;
 
     const whiteSum = (results.white1 || 0) + (results.white2 || 0);
@@ -119,20 +119,23 @@ const DiceDisplay = ({ results, state, part = 'all' }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {colors.map((c) => (
-                                <tr key={c.key}>
-                                    <td style={{ padding: '2px' }}>
-                                        <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
-                                            {(results.white1 || 0) + (results[c.key] || 0)}
-                                        </Paper>
-                                    </td>
-                                    <td style={{ padding: '2px' }}>
-                                        <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
-                                            {(results.white2 || 0) + (results[c.key] || 0)}
-                                        </Paper>
-                                    </td>
-                                </tr>
-                            ))}
+                            {colors.map((c) => {
+                                const isDimmed = state === 'STAGE_2_MOVES' && isActivePlayerAi;
+                                return (
+                                    <tr key={c.key} style={{ opacity: isDimmed ? 0.4 : 1, filter: isDimmed ? 'grayscale(0.5)' : 'none', transition: 'all 0.3s ease' }}>
+                                        <td style={{ padding: '2px' }}>
+                                            <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
+                                                {(results.white1 || 0) + (results[c.key] || 0)}
+                                            </Paper>
+                                        </td>
+                                        <td style={{ padding: '2px' }}>
+                                            <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
+                                                {(results.white2 || 0) + (results[c.key] || 0)}
+                                            </Paper>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </Box>
