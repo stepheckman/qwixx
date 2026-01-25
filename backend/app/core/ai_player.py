@@ -3,12 +3,11 @@ AI Player class for the Qwixx game.
 """
 
 import random
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 from .player import Player
 from .die import DieColor
-from .scoresheet import Scoresheet
 from .game_state import GameState
-from .logger import get_ai_logger, log_player_decision, log_game_event
+from .logger import get_ai_logger, log_game_event
 
 
 class AIPlayer(Player):
@@ -52,17 +51,55 @@ class AIPlayer(Player):
         )
 
         decision = None
+        best_score = -float("inf")
+
         if self.difficulty == "easy":
             decision = self._make_easy_decision(available_moves)
+            if decision:
+                best_score = 1.0  # Dummy score for easy AI
         elif self.difficulty == "medium":
-            decision = self._make_medium_decision(game, available_moves)
+            scored_moves = []
+            for color, number in available_moves:
+                score = self._evaluate_move(game, color, number)
+                scored_moves.append((score, color, number))
+            scored_moves.sort(key=lambda x: x[0], reverse=True)
+
+            best_score = scored_moves[0][0]
+            # 85% chance to pick the best move, 15% random top 3
+            if random.random() < 0.85:
+                decision = (scored_moves[0][1], scored_moves[0][2])
+            else:
+                top_moves = scored_moves[: min(3, len(scored_moves))]
+                _, color, number = random.choice(top_moves)
+                decision = (color, number)
         else:  # hard
-            decision = self._make_hard_decision(game, available_moves)
+            scored_moves = []
+            for color, number in available_moves:
+                score = self._evaluate_move_advanced(game, color, number)
+                scored_moves.append((score, color, number))
+            scored_moves.sort(key=lambda x: x[0], reverse=True)
+
+            best_score = scored_moves[0][0]
+            decision = (scored_moves[0][1], scored_moves[0][2])
+
+        # NEW: Move Score Threshold
+        # If the best move is actually harmful (negative score) or just not good enough
+        # for a passive player, consider skipping it.
+        # Passive players (not their turn) should be very picky since they take no penalties for skipping.
+        threshold = 0.0
+        if not self.is_active:
+            threshold = 2.0  # Be more picky when passive
+
+        if decision and best_score < threshold:
+            self.logger.info(
+                f"{self.name} decided to skip move despite availability (score {best_score:.1f} < threshold {threshold:.1f})"
+            )
+            decision = None
 
         if decision:
             color, number = decision
             self.logger.info(
-                f"{self.name} decided to mark {number} in {color.value} row"
+                f"{self.name} decided to mark {number} in {color.value} row (score: {best_score:.1f})"
             )
             log_game_event(
                 "AI_DECISION",
@@ -71,6 +108,7 @@ class AIPlayer(Player):
                 difficulty=self.difficulty,
                 color=color.value,
                 number=number,
+                score=best_score,
                 available_moves=[(c.value, n) for c, n in available_moves],
             )
         else:
@@ -81,11 +119,13 @@ class AIPlayer(Player):
                 ai_player=self.name,
                 difficulty=self.difficulty,
                 decision="skip",
+                best_score=best_score if available_moves else None,
                 available_moves=[(c.value, n) for c, n in available_moves],
             )
 
         return decision
 
+    # These methods are now integrated into make_move_decision to avoid redundant evaluations
     def _make_easy_decision(
         self, available_moves: List[Tuple[DieColor, int]]
     ) -> Optional[Tuple[DieColor, int]]:
@@ -93,52 +133,6 @@ class AIPlayer(Player):
         if random.random() < 0.5:  # 50% chance to skip
             return None
         return random.choice(available_moves)
-
-    def _make_medium_decision(
-        self, game, available_moves: List[Tuple[DieColor, int]]
-    ) -> Optional[Tuple[DieColor, int]]:
-        """Medium AI: Consider basic strategy factors."""
-        if not available_moves:
-            return None
-
-        # Score each move based on various factors
-        scored_moves = []
-
-        for color, number in available_moves:
-            score = self._evaluate_move(game, color, number)
-            scored_moves.append((score, color, number))
-
-        # Sort by score (highest first) - only compare the score (first element)
-        scored_moves.sort(key=lambda x: x[0], reverse=True)
-
-        # 85% chance to pick the best move, 15% chance for some randomness
-        if random.random() < 0.85:
-            return (scored_moves[0][1], scored_moves[0][2])
-        else:
-            # Pick from top 3 moves or all if fewer available
-            top_moves = scored_moves[: min(3, len(scored_moves))]
-            _, color, number = random.choice(top_moves)
-            return (color, number)
-
-    def _make_hard_decision(
-        self, game, available_moves: List[Tuple[DieColor, int]]
-    ) -> Optional[Tuple[DieColor, int]]:
-        """Hard AI: Advanced strategy with very high consistency."""
-        if not available_moves:
-            return None
-
-        # Score each move with advanced evaluation
-        scored_moves = []
-
-        for color, number in available_moves:
-            score = self._evaluate_move_advanced(game, color, number)
-            scored_moves.append((score, color, number))
-
-        # Sort by score (highest first)
-        scored_moves.sort(key=lambda x: x[0], reverse=True)
-
-        # 100% chance to pick the best move for Hard mode
-        return (scored_moves[0][1], scored_moves[0][2])
 
     def _evaluate_move(self, game, color: DieColor, number: int) -> float:
         """
@@ -553,37 +547,37 @@ class AIPlayer(Player):
         if color in [DieColor.RED, DieColor.YELLOW]:
             if marked_count == 0:  # First move in row
                 if number >= 10:
-                    penalty = -20.0  # Severe penalty for 10, 11, 12 as first move
+                    penalty = -30.0  # Increased from -20.0
                 elif number >= 8:
-                    penalty = -10.0  # Strong penalty for 8, 9 as first move
+                    penalty = -20.0  # Increased from -10.0
                 elif number >= 6:
-                    penalty = -5.0  # Moderate penalty for 6, 7 as first move
+                    penalty = -10.0  # Increased from -5.0
             elif marked_count == 1:  # Second move in row
                 if number >= 11:
-                    penalty = -15.0  # Strong penalty for 11, 12 as second move
+                    penalty = -20.0  # Increased from -15.0
                 elif number >= 9:
-                    penalty = -8.0  # Moderate penalty for 9, 10 as second move
+                    penalty = -12.0  # Increased from -8.0
             elif marked_count == 2:  # Third move in row
                 if number == 12:
-                    penalty = -10.0  # Penalty for 12 as third move
+                    penalty = -15.0  # Increased from -10.0
 
         # For descending rows (GREEN, BLUE): penalize low numbers early
         else:
             if marked_count == 0:  # First move in row
                 if number <= 3:
-                    penalty = -20.0  # Severe penalty for 2, 3 as first move
+                    penalty = -30.0  # Increased from -20.0
                 elif number <= 5:
-                    penalty = -10.0  # Strong penalty for 4, 5 as first move
+                    penalty = -20.0  # Increased from -10.0
                 elif number <= 7:
-                    penalty = -5.0  # Moderate penalty for 6, 7 as first move
+                    penalty = -10.0  # Increased from -5.0
             elif marked_count == 1:  # Second move in row
                 if number <= 2:
-                    penalty = -15.0  # Strong penalty for 2 as second move
+                    penalty = -20.0  # Increased from -15.0
                 elif number <= 4:
-                    penalty = -8.0  # Moderate penalty for 3, 4 as second move
+                    penalty = -12.0  # Increased from -8.0
             elif marked_count == 2:  # Third move in row
                 if number == 2:
-                    penalty = -10.0  # Penalty for 2 as third move
+                    penalty = -15.0  # Increased from -10.0
 
         return penalty
 
@@ -663,20 +657,20 @@ class AIPlayer(Player):
         # Early in the row, heavily penalize moves that block many future opportunities
         if marked_count <= 2:
             if blocked_numbers >= 8:
-                return -25.0  # Severe penalty for blocking 8+ numbers early
+                return -35.0  # Increased from -25.0
             elif blocked_numbers >= 6:
-                return -15.0  # Strong penalty for blocking 6-7 numbers early
+                return -25.0  # Increased from -15.0
             elif blocked_numbers >= 4:
-                return -8.0  # Moderate penalty for blocking 4-5 numbers early
+                return -15.0  # Increased from -8.0
             elif blocked_numbers <= 2:
-                return 5.0  # Bonus for keeping many options open
+                return 8.0  # Increased from 5.0
 
         # Later in the row, blocking becomes less of an issue
         elif marked_count <= 4:
             if blocked_numbers >= 6:
-                return -10.0  # Reduced penalty later in development
+                return -15.0  # Increased from -10.0
             elif blocked_numbers <= 2:
-                return 3.0  # Smaller bonus for good positioning
+                return 5.0  # Increased from 3.0
 
         return 0.0
 
@@ -695,7 +689,7 @@ class AIPlayer(Player):
         penalty_count = scoresheet.penalties
 
         # Base probability based on difficulty and stage
-        # Increased Stage 1 probabilities to encourage more active play
+        # Differentiate between active and passive roles
         if self.difficulty == "easy":
             base_prob = 0.75 if stage == 1 else 0.8
         elif self.difficulty == "medium":
@@ -703,13 +697,19 @@ class AIPlayer(Player):
         else:  # hard
             base_prob = 0.9 if stage == 1 else 0.95
 
+        # Passive players should be much more selective in Stage 1
+        if not self.is_active and stage == 1:
+            base_prob = max(
+                0.4, base_prob - 0.3
+            )  # Significant reduction for passive Stage 1
+
         # Adjust probability based on penalty risk
         if penalty_count >= 3:
-            base_prob = 0.95  # Almost always try to move when at high penalty risk
+            base_prob = 0.98  # Almost always try to move when at high penalty risk
         elif penalty_count >= 2:
-            base_prob = min(base_prob + 0.1, 0.95)  # Increase probability
+            base_prob = min(base_prob + 0.15, 0.98)
         elif penalty_count >= 1:
-            base_prob = min(base_prob + 0.05, 0.9)  # Slight increase
+            base_prob = min(base_prob + 0.05, 0.95)
 
         # Adjust based on available moves quality
         available_moves = self.get_available_moves(game)
@@ -725,19 +725,14 @@ class AIPlayer(Player):
 
             # If the best move is very good, increase probability
             if best_score >= 10:
-                base_prob = min(base_prob + 0.1, 0.98)
+                base_prob = min(base_prob + 0.15, 0.98)
             elif best_score >= 5:
-                base_prob = min(base_prob + 0.05, 0.95)
+                base_prob = min(base_prob + 0.08, 0.96)
             elif best_score <= 0:
-                # For Stage 1, be less aggressive about reducing probability
-                if stage == 1:
-                    base_prob = max(
-                        base_prob - 0.05, 0.5
-                    )  # Smaller reduction for Stage 1
-                else:
-                    base_prob = max(
-                        base_prob - 0.1, 0.3
-                    )  # Original reduction for Stage 2
+                # If negative score, be even less likely to participate
+                # Especially if passive
+                reduction = 0.2 if self.is_active else 0.4
+                base_prob = max(base_prob - reduction, 0.1)
 
         # Add small random factor to avoid predictability
         random_factor = random.uniform(-0.05, 0.05)

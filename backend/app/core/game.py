@@ -554,8 +554,12 @@ class Game:
         # Game ends if 2 colors are locked or any player has 4 penalties
         if len(self.locked_colors) >= 2:
             self.state = GameState.GAME_OVER
-            winner = self.get_winner()
-            if winner:
+            winners = self.get_winners()
+            if len(winners) > 1:
+                names = " and ".join([p.get_name() for p in winners])
+                self.message = f"Game Over! Two colors locked. It's a tie between {names} with {winners[0].get_total_score()} points!"
+            elif len(winners) == 1:
+                winner = winners[0]
                 self.message = f"Game Over! Two colors locked. {winner.get_name()} wins with {winner.get_total_score()} points!"
             else:
                 self.message = "Game Over! Two colors have been locked."
@@ -564,8 +568,12 @@ class Game:
         for player in self.players:
             if player.is_game_over():
                 self.state = GameState.GAME_OVER
-                winner = self.get_winner()
-                if winner:
+                winners = self.get_winners()
+                if len(winners) > 1:
+                    names = " and ".join([p.get_name() for p in winners])
+                    self.message = f"Game Over! {player.get_name()} reached penalty limit. It's a tie between {names} with {winners[0].get_total_score()} points!"
+                elif len(winners) == 1:
+                    winner = winners[0]
                     self.message = f"Game Over! {player.get_name()} reached penalty limit. {winner.get_name()} wins with {winner.get_total_score()} points!"
                 else:
                     self.message = (
@@ -574,11 +582,17 @@ class Game:
                 return
 
     def get_winner(self) -> Optional[Player]:
-        """Get the winner of the game."""
-        if self.state != GameState.GAME_OVER:
-            return None
+        """Get the winner of the game (legacy, returns first if tie)."""
+        winners = self.get_winners()
+        return winners[0] if winners else None
 
-        return max(self.players, key=lambda p: p.get_total_score())
+    def get_winners(self) -> List[Player]:
+        """Get all players with the maximum score."""
+        if self.state != GameState.GAME_OVER:
+            return []
+
+        max_score = max(p.get_total_score() for p in self.players)
+        return [p for p in self.players if p.get_total_score() == max_score]
 
     def handle_ai_moves(self) -> None:
         """Process all AI players' decisions automatically until it's a human's turn."""
