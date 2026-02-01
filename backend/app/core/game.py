@@ -73,7 +73,7 @@ class Game:
             # Single player mode: Human player 1 vs AI player 2
             self.players = [
                 Player("Player 1", 0),
-                AIPlayer("AI Player", 1, difficulty=self.ai_strategy),
+                AIPlayer("Auto Player", 1, difficulty=self.ai_strategy),
             ]
             self.logger.info(
                 f"Game setup: 1 human player vs AI ({self.ai_strategy} difficulty)"
@@ -156,7 +156,7 @@ class Game:
         if self.state != GameState.WAITING_FOR_ROLL:
             return
 
-        self.dice_results = self.dice_roller.roll_all()
+        self.dice_results = self.dice_roller.roll_all(self.locked_colors)
         current_player = self.get_current_player()
 
         # Log dice roll
@@ -325,7 +325,9 @@ class Game:
                     stage = 1
             elif player == self.get_current_player():
                 # This must be a colored combination move
-                white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+                white_colored_sums = self.dice_roller.get_white_plus_colored_sums(
+                    self.locked_colors
+                )
                 if color in white_colored_sums and number in white_colored_sums[color]:
                     player.record_colored_combination_move()
                     move_type = "colored_combination"
@@ -424,7 +426,9 @@ class Game:
             if player != self.get_current_player():
                 return False  # Only rolling player can move in Stage 2
 
-            white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+            white_colored_sums = self.dice_roller.get_white_plus_colored_sums(
+                self.locked_colors
+            )
             if color in white_colored_sums and number in white_colored_sums[color]:
                 return player.can_use_colored_combination()
             else:
@@ -438,7 +442,9 @@ class Game:
 
             # Check if this is a white + colored combination move (active player only)
             if player == self.get_current_player():
-                white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+                white_colored_sums = self.dice_roller.get_white_plus_colored_sums(
+                    self.locked_colors
+                )
                 if color in white_colored_sums and number in white_colored_sums[color]:
                     return player.can_use_colored_combination()
 
@@ -714,7 +720,9 @@ class Game:
         elif stage == 2:
             if player != self.get_current_player():
                 return False
-            white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+            white_colored_sums = self.dice_roller.get_white_plus_colored_sums(
+                self.locked_colors
+            )
             for color, sums in white_colored_sums.items():
                 if color not in self.locked_colors:
                     for s in sums:

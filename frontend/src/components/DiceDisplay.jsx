@@ -41,7 +41,7 @@ const Die = ({ value, color, label }) => {
     );
 };
 
-const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
+const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi, locked_colors = [] }) => {
     if (!results) return <Typography color="textSecondary">Roll to start</Typography>;
 
     const whiteSum = (results.white1 || 0) + (results.white2 || 0);
@@ -67,10 +67,10 @@ const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
             {/* Colored Dice Row */}
             <Box mt={1}>
                 <Box display="flex" gap={1} justifyContent="center" flexWrap="wrap">
-                    <Die value={results.red} color="red" label="R" />
-                    <Die value={results.yellow} color="yellow" label="Y" />
-                    <Die value={results.green} color="green" label="G" />
-                    <Die value={results.blue} color="blue" label="B" />
+                    {!locked_colors.includes('red') && <Die value={results.red} color="red" label="R" />}
+                    {!locked_colors.includes('yellow') && <Die value={results.yellow} color="yellow" label="Y" />}
+                    {!locked_colors.includes('green') && <Die value={results.green} color="green" label="G" />}
+                    {!locked_colors.includes('blue') && <Die value={results.blue} color="blue" label="B" />}
                 </Box>
             </Box>
         </Box>
@@ -123,6 +123,9 @@ const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
                         </thead>
                         <tbody>
                             {colors.map((c) => {
+                                // Don't render row if color is locked
+                                if (locked_colors.includes(c.key)) return null;
+
                                 // Dimmed if:
                                 // 1. It's the AI's turn (they are never playable for the human)
                                 // 2. It's anyone's Stage 1 (they are not yet playable)

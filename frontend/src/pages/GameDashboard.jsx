@@ -333,6 +333,7 @@ const GameDashboard = () => {
                                 state={gameState.state}
                                 part="values"
                                 isActivePlayerAi={gameState.players[gameState.current_player_index].is_ai}
+                                locked_colors={gameState.locked_colors}
                             />
                         </Paper>
 
@@ -346,6 +347,7 @@ const GameDashboard = () => {
                                 state={gameState.state}
                                 part="numbers"
                                 isActivePlayerAi={gameState.players[gameState.current_player_index].is_ai}
+                                locked_colors={gameState.locked_colors}
                             />
                         </Paper>
 
@@ -401,7 +403,7 @@ const GameDashboard = () => {
                         {gameState.players.map((player) => (
                             <Box key={player.id} display="flex" justifyContent="space-between" mb={1}>
                                 <Typography variant="body1" sx={{ fontWeight: player.is_active ? 'bold' : 'normal' }}>
-                                    {player.name} {player.is_ai ? '(CPU)' : ''}
+                                    {player.name} {player.is_ai ? '(Auto)' : ''}
                                 </Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                                     {player.scoresheet.total_score} pts

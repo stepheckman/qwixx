@@ -7,10 +7,10 @@ from app.core.game_state import GameState
 class DiceResult(BaseModel):
     white1: int
     white2: int
-    red: int
-    yellow: int
-    green: int
-    blue: int
+    red: Optional[int]
+    yellow: Optional[int]
+    green: Optional[int]
+    blue: Optional[int]
 
 
 class ScoreSheetSchema(BaseModel):
@@ -31,7 +31,7 @@ class PlayerSchema(BaseModel):
 class GameStateSchema(BaseModel):
     state: str
     current_player_index: int
-    dice_results: Optional[Dict[str, int]]
+    dice_results: Optional[Dict[str, Optional[int]]]
     locked_colors: List[str]
     message: str
     players: List[PlayerSchema]
