@@ -89,6 +89,11 @@ class AIPlayer(Player):
         threshold = 0.0
         if not self.is_active:
             threshold = 2.0  # Be more picky when passive
+        elif self.difficulty == "hard":
+            # For Hard AI as active player, if the best move is truly terrible
+            # (e.g., skips almost all numbers), it's better to take a penalty (-5)
+            # than to ruin a row's potential.
+            threshold = -15.0
 
         if decision and best_score < threshold:
             self.logger.info(
@@ -546,38 +551,38 @@ class AIPlayer(Player):
         # For ascending rows (RED, YELLOW): penalize high numbers early
         if color in [DieColor.RED, DieColor.YELLOW]:
             if marked_count == 0:  # First move in row
-                if number >= 10:
-                    penalty = -30.0  # Increased from -20.0
-                elif number >= 8:
-                    penalty = -20.0  # Increased from -10.0
-                elif number >= 6:
-                    penalty = -10.0  # Increased from -5.0
-            elif marked_count == 1:  # Second move in row
                 if number >= 11:
-                    penalty = -20.0  # Increased from -15.0
+                    penalty = -40.0
                 elif number >= 9:
-                    penalty = -12.0  # Increased from -8.0
+                    penalty = -30.0
+                elif number >= 7:
+                    penalty = -15.0
+            elif marked_count == 1:  # Second move in row
+                if number >= 12:
+                    penalty = -25.0
+                elif number >= 10:
+                    penalty = -15.0
             elif marked_count == 2:  # Third move in row
-                if number == 12:
-                    penalty = -15.0  # Increased from -10.0
+                if number >= 12:
+                    penalty = -20.0
 
         # For descending rows (GREEN, BLUE): penalize low numbers early
         else:
             if marked_count == 0:  # First move in row
                 if number <= 3:
-                    penalty = -30.0  # Increased from -20.0
+                    penalty = -40.0
                 elif number <= 5:
-                    penalty = -20.0  # Increased from -10.0
+                    penalty = -30.0
                 elif number <= 7:
-                    penalty = -10.0  # Increased from -5.0
+                    penalty = -15.0
             elif marked_count == 1:  # Second move in row
                 if number <= 2:
-                    penalty = -20.0  # Increased from -15.0
+                    penalty = -25.0
                 elif number <= 4:
-                    penalty = -12.0  # Increased from -8.0
+                    penalty = -15.0
             elif marked_count == 2:  # Third move in row
-                if number == 2:
-                    penalty = -15.0  # Increased from -10.0
+                if number <= 2:
+                    penalty = -20.0
 
         return penalty
 
@@ -657,20 +662,43 @@ class AIPlayer(Player):
         # Early in the row, heavily penalize moves that block many future opportunities
         if marked_count <= 2:
             if blocked_numbers >= 8:
-                return -35.0  # Increased from -25.0
+                return -50.0  # Increased from -35.0 (Extremely severe)
             elif blocked_numbers >= 6:
-                return -25.0  # Increased from -15.0
+                return -35.0  # Increased from -25.0
             elif blocked_numbers >= 4:
-                return -15.0  # Increased from -8.0
+                return -20.0  # Increased from -15.0
+            elif blocked_numbers <= 1:
+                return 12.0  # Increased from 8.0 (Encourage small steps)
             elif blocked_numbers <= 2:
-                return 8.0  # Increased from 5.0
+                return 8.0
 
         # Later in the row, blocking becomes less of an issue
         elif marked_count <= 4:
             if blocked_numbers >= 6:
-                return -15.0  # Increased from -10.0
+                return -20.0  # Increased from -15.0
             elif blocked_numbers <= 2:
-                return 5.0  # Increased from 3.0
+                return 6.0  # Increased from 5.0
+
+        # NEW: Lock sustainability penalty for Hard mode
+        # If we have < 5 marks and we just marked the 2nd to last number,
+        # we can still reach 5 if we mark the last one, but we MUST be careful.
+        # If we mark a number that makes it IMPOSSIBLE to ever reach 5 marks,
+        # apply a massive penalty in Hard mode.
+        if self.difficulty == "hard":
+            remaining_possible = 0
+            if color in [DieColor.RED, DieColor.YELLOW]:
+                # Numbers > current number that aren't marked
+                remaining_possible = 12 - number
+            else:
+                # Numbers < current number that aren't marked
+                remaining_possible = number - 2
+
+            if (marked_count + 1 + remaining_possible) < 5:
+                # It's now impossible to lock this row
+                return -40.0
+            elif (marked_count + 1 + remaining_possible) == 5:
+                # We can ONLY lock if we get every single remaining number
+                return -15.0
 
         return 0.0
 

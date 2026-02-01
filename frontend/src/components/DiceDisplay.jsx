@@ -97,7 +97,10 @@ const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
                             fontWeight: 'bold',
                             color: '#000',
                             boxShadow: '0 0 10px rgba(25, 118, 210, 0.3)',
-                            mx: 'auto' // ensure margin auto for centering
+                            mx: 'auto', // ensure margin auto for centering
+                            opacity: state === 'STAGE_1_MOVES' ? 1 : 0.4,
+                            filter: state === 'STAGE_1_MOVES' ? 'none' : 'grayscale(1)',
+                            transition: 'all 0.3s ease'
                         }}
                     >
                         {whiteSum}
@@ -120,9 +123,21 @@ const DiceDisplay = ({ results, state, part = 'all', isActivePlayerAi }) => {
                         </thead>
                         <tbody>
                             {colors.map((c) => {
-                                const isDimmed = state === 'STAGE_2_MOVES' && isActivePlayerAi;
+                                // Dimmed if:
+                                // 1. It's the AI's turn (they are never playable for the human)
+                                // 2. It's anyone's Stage 1 (they are not yet playable)
+                                const isDimmedByStage = state === 'STAGE_1_MOVES';
+                                const isDimmedByAi = isActivePlayerAi;
+
                                 return (
-                                    <tr key={c.key} style={{ opacity: isDimmed ? 0.4 : 1, filter: isDimmed ? 'grayscale(0.5)' : 'none', transition: 'all 0.3s ease' }}>
+                                    <tr
+                                        key={c.key}
+                                        style={{
+                                            opacity: isDimmedByAi ? 0.2 : (isDimmedByStage ? 0.4 : 1),
+                                            filter: isDimmedByAi ? 'grayscale(1)' : (isDimmedByStage ? 'grayscale(0.5)' : 'none'),
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                    >
                                         <td style={{ padding: '2px' }}>
                                             <Paper elevation={1} sx={{ p: 0.5, bgcolor: c.bg, color: c.key === 'yellow' ? '#000' : '#fff', fontWeight: 'bold', fontSize: '0.875rem' }}>
                                                 {(results.white1 || 0) + (results[c.key] || 0)}

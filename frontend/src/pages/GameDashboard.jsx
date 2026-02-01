@@ -134,7 +134,7 @@ const GameDashboard = () => {
 
                     {setupOptions.numPlayers === 1 && (
                         <>
-                            <Typography variant="h6" gutterBottom>AI Difficulty</Typography>
+                            <Typography variant="h6" gutterBottom>Opponent Strategy</Typography>
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
                                     <Button
@@ -401,7 +401,7 @@ const GameDashboard = () => {
                         {gameState.players.map((player) => (
                             <Box key={player.id} display="flex" justifyContent="space-between" mb={1}>
                                 <Typography variant="body1" sx={{ fontWeight: player.is_active ? 'bold' : 'normal' }}>
-                                    {player.name} {player.is_ai ? '(AI)' : ''}
+                                    {player.name} {player.is_ai ? '(CPU)' : ''}
                                 </Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                                     {player.scoresheet.total_score} pts
