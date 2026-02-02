@@ -9,7 +9,7 @@ class TestStage1Logic(unittest.TestCase):
         self.game = Game(num_players=2)
 
         # Manually set up dice for predictable testing
-        def mock_roll_all():
+        def mock_roll_all(locked_colors=None):
             results = {
                 "white1": 3,
                 "white2": 4,
