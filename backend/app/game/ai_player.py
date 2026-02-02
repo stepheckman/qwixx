@@ -4,11 +4,11 @@ AI Player class for the Qwixx game.
 
 import random
 from typing import List, Tuple, Optional, Dict
-from .player import Player
-from .die import DieColor
-from .scoresheet import Scoresheet
-from .game_state import GameState
-from .logger import get_ai_logger, log_player_decision, log_game_event
+from app.game.player import Player
+from app.game.die import DieColor
+from app.game.scoresheet import Scoresheet
+from app.game.game_state import GameState
+from app.game.logger import get_ai_logger, log_player_decision, log_game_event
 
 class AIPlayer(Player):
     """AI player that can make automated decisions in Qwixx."""

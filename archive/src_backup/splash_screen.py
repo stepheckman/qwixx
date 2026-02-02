@@ -61,25 +61,25 @@ class SplashScreen:
             strategy_y,
             strategy_button_width,
             strategy_button_height,
-            "Easy AI",
+            "Easy",
             COLORS['green']
         )
-        
+
         self.medium_button = Button(
             screen_width // 2 - strategy_button_width // 2,
             strategy_y + strategy_spacing,
             strategy_button_width,
             strategy_button_height,
-            "Medium AI",
+            "Medium",
             COLORS['yellow']
         )
-        
+
         self.hard_button = Button(
             screen_width // 2 - strategy_button_width // 2,
             strategy_y + strategy_spacing * 2,
             strategy_button_width,
             strategy_button_height,
-            "Hard AI",
+            "Hard",
             COLORS['red']
         )
         
@@ -176,7 +176,7 @@ class SplashScreen:
             self.one_player_button.draw(self.screen)
             
             # Description (below button)
-            desc1_text = self.font_small.render("1 Player: You vs AI", True, COLORS['text_secondary'])
+            desc1_text = self.font_small.render("1 Player: You vs Auto Player", True, COLORS['text_secondary'])
             desc1_rect = desc1_text.get_rect(center=(self.screen.get_width() // 2, 330))
             self.screen.blit(desc1_text, desc1_rect)
             
@@ -193,7 +193,7 @@ class SplashScreen:
         else:
             # AI strategy selection screen
             # Draw subtitle
-            subtitle_text = self.font_medium.render("Choose AI Difficulty", True, COLORS['text_secondary'])
+            subtitle_text = self.font_medium.render("Choose Auto Player Difficulty", True, COLORS['text_secondary'])
             subtitle_rect = subtitle_text.get_rect(center=(self.screen.get_width() // 2, 180))
             self.screen.blit(subtitle_text, subtitle_rect)
             

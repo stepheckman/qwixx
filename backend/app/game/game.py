@@ -1,17 +1,16 @@
+```
 """
 Main Game class for the Qwixx game.
 """
 
-import pygame
 from typing import List, Optional, Dict, Tuple
 
-from .player import Player
-from .ai_player import AIPlayer
-from .dice_roller import DiceRoller
-from .die import DieColor
-from .game_state import GameState
-from .gui import GameGUI
-from .logger import (
+from app.game.player import Player
+from app.game.ai_player import AIPlayer
+from app.game.dice_roller import DiceRoller
+from app.game.die import DieColor
+from app.game.game_state import GameState
+from app.game.logger import (
     get_game_logger, log_game_event, log_dice_roll,
     log_game_state_change, log_player_decision
 )
@@ -19,24 +18,21 @@ from .logger import (
 class Game:
     """Main game controller for Qwixx."""
     
-    def __init__(self, screen: pygame.Surface, num_players: int = 2, ai_strategy: str = "medium"):
+    def __init__(self, num_players: int = 2, ai_strategy: str = "medium"):
         """
         Initialize the game.
         
         Args:
-            screen: The pygame screen surface
             num_players: Number of human players (1 or 2)
             ai_strategy: AI difficulty strategy ("easy", "medium", "hard")
         """
-        self.screen = screen
-        self.gui = GameGUI(screen)
         self.dice_roller = DiceRoller()
         self.players: List[Player] = []
         self.current_player_index = 0
         self.state = GameState.SETUP
         self.dice_results: Optional[Dict[str, int]] = None
         self.locked_colors: set = set()  # Track which colors are locked globally
-        self.message = "Welcome to Qwixx! Click 'Start Game' to begin."
+        self.message = "Welcome to Qwixx! Starting new game."
         self.players_finished_moves: set = set()  # Track which players have finished their moves
         self.active_player_made_move = False  # Track if active player made any move
         self.stage_1_players_finished: set = set()  # Track players finished with stage 1
@@ -502,12 +498,8 @@ class Game:
         
         return max(self.players, key=lambda p: p.get_total_score())
     
-    def handle_event(self, event: pygame.event.Event) -> None:
-        """Handle pygame events."""
-        self.gui.handle_event(event, self)
-    
     def update(self) -> None:
-        """Update game state."""
+        """Update game state. (No timing/frames based logic in backend)"""
         # Handle AI player moves
         self.handle_ai_moves()
     
@@ -590,9 +582,6 @@ class Game:
             # AI is done with stage 2
             self.stage_2_done()
     
-    def draw(self) -> None:
-        """Draw the game."""
-        self.gui.draw(self)
     
     def get_state(self) -> GameState:
         """Get the current game state."""

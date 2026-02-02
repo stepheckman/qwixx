@@ -550,22 +550,38 @@ class GameGUI:
         self.screen.blit(sum_surface, sum_rect)
         
         # Always show colored dice combinations (for Stage 2 preview)
+        # Skip locked colors - their dice have been "removed from the game"
         game_state = game.get_state()
+        locked_colors = game.get_locked_colors()
+
         # Draw colored dice vertically - show possible sums instead of die values
         colors = ['red', 'yellow', 'green', 'blue']
-        for i, color in enumerate(colors):
-            y_pos = start_y + 60 + (i * 30)
-            
+        color_to_die_color = {
+            'red': DieColor.RED,
+            'yellow': DieColor.YELLOW,
+            'green': DieColor.GREEN,
+            'blue': DieColor.BLUE
+        }
+
+        y_offset = 0  # Track vertical position, skipping locked colors
+        for color in colors:
+            # Skip locked colors - their dice have been removed from the game
+            if color_to_die_color[color] in locked_colors:
+                continue
+
+            y_pos = start_y + 60 + (y_offset * 30)
+            y_offset += 1
+
             # Calculate possible sums with white dice
             white1_sum = dice_results['white1'] + dice_results[color]
             white2_sum = dice_results['white2'] + dice_results[color]
-            
+
             # Draw color label and possible sums
             color_text = f"{color.capitalize()}:"
             color_surface = self.font_medium.render(color_text, True, COLORS[color])
             # Left align color name relative to center
             self.screen.blit(color_surface, (center_x - 40, y_pos))
-            
+
             # Draw the two possible sums prominently
             # Dim them in Stage 1 to show they're for Stage 2
             text_color = COLORS['text_secondary'] if game_state == GameState.STAGE_1_MOVES else COLORS['text']
