@@ -261,6 +261,28 @@ class AIPlayer(Player):
         red_11_penalty = self._calculate_red_11_penalty(color, number)
         score += red_11_penalty
 
+        # 9. Score differential awareness - adjust risk based on game state
+        score_diff_adjustment = self._calculate_score_differential_adjustment(
+            game, color, number
+        )
+        score += score_diff_adjustment
+
+        # 10. Gap minimization - prefer moves that don't skip many numbers
+        gap_penalty = self._calculate_gap_penalty(color, number)
+        score += gap_penalty
+
+        # 11. Stage 2 combination probability bonus
+        stage_2_prob_bonus = self._calculate_stage_2_probability_bonus(
+            game, color, number
+        )
+        score += stage_2_prob_bonus
+
+        # 12. Premature lock prevention - don't lock if significantly ahead
+        premature_lock_penalty = self._calculate_premature_lock_penalty(
+            game, color, number
+        )
+        score += premature_lock_penalty
+
         return score
 
     def _calculate_potential_row_score(self, row, mark_count: int) -> int:
@@ -701,6 +723,266 @@ class AIPlayer(Player):
                 return -15.0
 
         return 0.0
+
+    def _calculate_score_differential_adjustment(
+        self, game, color: DieColor, number: int
+    ) -> float:
+        """
+        Adjust move value based on current score differential with opponents.
+        When behind, favor higher-risk/higher-reward moves.
+        When ahead, favor safer, consistent moves.
+
+        Args:
+            game: The current game instance
+            color: The color row being evaluated
+            number: The number being evaluated
+
+        Returns:
+            Adjustment score based on game situation
+        """
+        my_score = self.get_total_score()
+        opponent_scores = [
+            p.get_total_score() for p in game.get_players() if p != self
+        ]
+
+        if not opponent_scores:
+            return 0.0
+
+        max_opponent_score = max(opponent_scores)
+        score_diff = my_score - max_opponent_score
+
+        scoresheet = self.get_scoresheet()
+        row = scoresheet.rows[color]
+        marked_count = len(row.marked)
+
+        # Calculate if this is a "risky" move (skips many numbers)
+        if color in [DieColor.RED, DieColor.YELLOW]:
+            # For ascending rows
+            if marked_count == 0:
+                skipped = number - 2
+            else:
+                last_marked_pos = row.rightmost_marked
+                last_marked_num = row.numbers[last_marked_pos]
+                skipped = number - last_marked_num - 1
+        else:
+            # For descending rows
+            if marked_count == 0:
+                skipped = 12 - number
+            else:
+                last_marked_pos = row.rightmost_marked
+                last_marked_num = row.numbers[last_marked_pos]
+                skipped = last_marked_num - number - 1
+
+        is_risky_move = skipped >= 3
+
+        if score_diff < -15:
+            # Significantly behind - take more risks for potential big gains
+            if is_risky_move and marked_count >= 3:
+                return 8.0  # Encourage catching up with aggressive plays
+            elif self._can_enable_row_lock(row, number, marked_count):
+                return 12.0  # Big bonus for locking when behind
+            return 3.0  # General aggression bonus
+        elif score_diff < -5:
+            # Moderately behind - slightly more aggressive
+            if self._can_enable_row_lock(row, number, marked_count):
+                return 6.0
+            return 1.5
+        elif score_diff > 15:
+            # Significantly ahead - play safe, avoid risky moves
+            if is_risky_move:
+                return -8.0  # Penalize risky moves when ahead
+            if self._can_enable_row_lock(row, number, marked_count):
+                return -3.0  # Don't rush to end game when ahead
+            return 0.0
+        elif score_diff > 5:
+            # Moderately ahead - slightly conservative
+            if is_risky_move:
+                return -4.0
+            return 0.0
+
+        return 0.0
+
+    def _calculate_gap_penalty(self, color: DieColor, number: int) -> float:
+        """
+        Calculate penalty for moves that create large gaps (skip many numbers).
+        Smaller gaps are better as they leave more options for future moves.
+
+        Args:
+            color: The color row being evaluated
+            number: The number being evaluated
+
+        Returns:
+            Penalty (negative) for large gaps, bonus (positive) for small gaps
+        """
+        scoresheet = self.get_scoresheet()
+        row = scoresheet.rows[color]
+        marked_count = len(row.marked)
+
+        # Calculate the gap this move would create
+        if marked_count == 0:
+            # First move in row - gap is from start
+            if color in [DieColor.RED, DieColor.YELLOW]:
+                gap = number - 2  # Gap from 2
+            else:
+                gap = 12 - number  # Gap from 12
+        else:
+            # Gap from last marked position
+            last_marked_pos = row.rightmost_marked
+            current_pos = row.numbers.index(number)
+            gap = current_pos - last_marked_pos - 1
+
+        # Scoring based on gap size
+        if gap <= 0:
+            return 5.0  # Consecutive number - excellent
+        elif gap == 1:
+            return 2.0  # Small gap - good
+        elif gap == 2:
+            return 0.0  # Moderate gap - neutral
+        elif gap == 3:
+            return -3.0  # Getting risky
+        elif gap == 4:
+            return -6.0  # Large gap
+        elif gap == 5:
+            return -10.0  # Very large gap
+        else:
+            return -15.0 - (gap - 5) * 3  # Escalating penalty for huge gaps
+
+    def _calculate_stage_2_probability_bonus(
+        self, game, color: DieColor, number: int
+    ) -> float:
+        """
+        Calculate bonus based on probability of getting this number in Stage 2.
+        Stage 2 uses white die + colored die, which has different probabilities
+        than white + white sum.
+
+        Args:
+            game: The current game instance
+            color: The color row being evaluated
+            number: The number being evaluated
+
+        Returns:
+            Bonus for rare Stage 2 combinations
+        """
+        game_state = game.get_state()
+
+        # Only apply in Stage 2
+        if game_state != GameState.STAGE_2_MOVES:
+            return 0.0
+
+        # Probability of rolling a specific sum with two dice (one white 1-6, one colored 1-6)
+        # This is the same as standard 2d6 probability
+        # But we have TWO white dice, so we can use either one
+        # This effectively doubles chances for most sums
+
+        # Base probability for single white + colored
+        base_prob = {
+            2: 1/36,   # 1+1 only
+            3: 2/36,   # 1+2, 2+1
+            4: 3/36,
+            5: 4/36,
+            6: 5/36,
+            7: 6/36,   # Most common
+            8: 5/36,
+            9: 4/36,
+            10: 3/36,
+            11: 2/36,
+            12: 1/36,  # 6+6 only
+        }
+
+        prob = base_prob.get(number, 0.1)
+
+        # With two white dice to choose from, effective probability is higher
+        # (roughly 1 - (1-p)^2 for getting at least one match, but simplified)
+        effective_prob = min(prob * 1.8, 0.3)  # Cap at 30%
+
+        # Bonus for rare numbers (harder to get in Stage 2)
+        if effective_prob <= 0.06:
+            return 4.0  # Very rare - big bonus for taking it now
+        elif effective_prob <= 0.10:
+            return 2.0  # Rare
+        elif effective_prob >= 0.25:
+            return -1.0  # Common - might get it later
+        return 0.0
+
+    def _calculate_premature_lock_penalty(
+        self, game, color: DieColor, number: int
+    ) -> float:
+        """
+        Penalize locking a row too early when significantly ahead.
+        Ending the game early when ahead might leave points on the table.
+
+        Args:
+            game: The current game instance
+            color: The color row being evaluated
+            number: The number being evaluated
+
+        Returns:
+            Penalty for premature locking when ahead
+        """
+        scoresheet = self.get_scoresheet()
+        row = scoresheet.rows[color]
+        marked_count = len(row.marked)
+
+        # Only applies if this move would lock the row
+        if not self._can_enable_row_lock(row, number, marked_count):
+            return 0.0
+
+        # Check if we're significantly ahead
+        my_score = self.get_total_score()
+        opponent_scores = [
+            p.get_total_score() for p in game.get_players() if p != self
+        ]
+
+        if not opponent_scores:
+            return 0.0
+
+        max_opponent_score = max(opponent_scores)
+        score_diff = my_score - max_opponent_score
+
+        # Check how many rows are already locked
+        locked_count = len(game.get_locked_colors())
+
+        # If this would be the 2nd lock (ending the game)
+        if locked_count >= 1:
+            if score_diff > 20:
+                # Way ahead - might want to keep playing for more points
+                # But only if other rows have good potential
+                other_row_potential = 0
+                for other_color in [DieColor.RED, DieColor.YELLOW, DieColor.GREEN, DieColor.BLUE]:
+                    if other_color != color and other_color not in game.get_locked_colors():
+                        other_row = scoresheet.rows[other_color]
+                        if len(other_row.marked) >= 3:
+                            other_row_potential += len(other_row.marked) * 2
+
+                if other_row_potential >= 10:
+                    return -8.0  # Penalty for ending game early with good potential elsewhere
+            elif score_diff > 10:
+                return -3.0  # Minor penalty
+            elif score_diff < -10:
+                return 10.0  # Bonus for ending game when behind (lock and hope)
+
+        return 0.0
+
+    def _count_reachable_numbers(self, color: DieColor, from_number: int) -> int:
+        """
+        Count how many numbers can still be reached after marking a given number.
+
+        Args:
+            color: The color row
+            from_number: The number being marked
+
+        Returns:
+            Count of numbers that can still be marked after this one
+        """
+        scoresheet = self.get_scoresheet()
+        row = scoresheet.rows[color]
+
+        if color in [DieColor.RED, DieColor.YELLOW]:
+            # Ascending: can reach numbers > from_number up to 12
+            return 12 - from_number
+        else:
+            # Descending: can reach numbers < from_number down to 2
+            return from_number - 2
 
     def should_make_move_in_stage(self, game, stage: int) -> bool:
         """
