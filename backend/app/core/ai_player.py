@@ -28,7 +28,7 @@ class AIPlayer(Player):
         self.is_ai = True
         self.logger = get_ai_logger()
 
-        self.logger.info(f"AI Player {name} initialized with {difficulty} difficulty")
+        self.logger.info(f"Auto Player {name} initialized with {difficulty} difficulty")
 
     def make_move_decision(
         self, game, available_moves: List[Tuple[DieColor, int]]
@@ -543,6 +543,9 @@ class AIPlayer(Player):
         """
         Calculate penalty for poor early game positioning (marking high numbers early).
 
+        The key insight is that in Qwixx, preserving flexibility is crucial. Making a move
+        that blocks many future numbers is often worse than skipping entirely.
+
         Args:
             color: The color row being evaluated
             number: The number being evaluated
@@ -551,47 +554,71 @@ class AIPlayer(Player):
         Returns:
             Penalty score (negative) for bad positioning, 0 otherwise
         """
-        # Only apply penalties for early moves in a row (0-2 marks)
-        if marked_count > 2:
+        # Only apply penalties for early moves in a row (0-3 marks)
+        if marked_count > 3:
             return 0.0
 
         penalty = 0.0
 
         # For ascending rows (RED, YELLOW): penalize high numbers early
+        # Ideal first moves: 2, 3, 4, 5 (keep options open)
         if color in [DieColor.RED, DieColor.YELLOW]:
             if marked_count == 0:  # First move in row
                 if number >= 10:
-                    penalty = -20.0  # Severe penalty for 10, 11, 12 as first move
+                    penalty = -50.0  # Extreme penalty - blocks 8+ numbers
                 elif number >= 8:
-                    penalty = -10.0  # Strong penalty for 8, 9 as first move
+                    penalty = -35.0  # Very severe - blocks 6-7 numbers
+                elif number >= 7:
+                    penalty = -20.0  # Severe - blocks 5 numbers
                 elif number >= 6:
-                    penalty = -5.0  # Moderate penalty for 6, 7 as first move
+                    penalty = -10.0  # Moderate - blocks 4 numbers
+                elif number <= 4:
+                    penalty = 3.0  # Bonus for good starting positions
             elif marked_count == 1:  # Second move in row
                 if number >= 11:
-                    penalty = -15.0  # Strong penalty for 11, 12 as second move
+                    penalty = -40.0  # Very bad - almost no room left
                 elif number >= 9:
-                    penalty = -8.0  # Moderate penalty for 9, 10 as second move
+                    penalty = -25.0  # Bad positioning
+                elif number >= 8:
+                    penalty = -15.0  # Suboptimal
             elif marked_count == 2:  # Third move in row
+                if number >= 11:
+                    penalty = -30.0  # Still very limiting
+                elif number >= 10:
+                    penalty = -15.0
+            elif marked_count == 3:  # Fourth move in row
                 if number == 12:
-                    penalty = -10.0  # Penalty for 12 as third move
+                    penalty = -20.0  # Jumping to end too fast
 
         # For descending rows (GREEN, BLUE): penalize low numbers early
+        # Ideal first moves: 12, 11, 10, 9 (keep options open)
         else:
             if marked_count == 0:  # First move in row
-                if number <= 3:
-                    penalty = -20.0  # Severe penalty for 2, 3 as first move
+                if number <= 4:
+                    penalty = -50.0  # Extreme penalty - blocks 8+ numbers
                 elif number <= 5:
-                    penalty = -10.0  # Strong penalty for 4, 5 as first move
+                    penalty = -35.0  # Very severe - blocks 6-7 numbers
+                elif number <= 6:
+                    penalty = -20.0  # Severe - blocks 5 numbers
                 elif number <= 7:
-                    penalty = -5.0  # Moderate penalty for 6, 7 as first move
+                    penalty = -10.0  # Moderate - blocks 4 numbers
+                elif number >= 10:
+                    penalty = 3.0  # Bonus for good starting positions
             elif marked_count == 1:  # Second move in row
-                if number <= 2:
-                    penalty = -15.0  # Strong penalty for 2 as second move
-                elif number <= 4:
-                    penalty = -8.0  # Moderate penalty for 3, 4 as second move
+                if number <= 3:
+                    penalty = -40.0  # Very bad - almost no room left
+                elif number <= 5:
+                    penalty = -25.0  # Bad positioning
+                elif number <= 6:
+                    penalty = -15.0  # Suboptimal
             elif marked_count == 2:  # Third move in row
+                if number <= 3:
+                    penalty = -30.0  # Still very limiting
+                elif number <= 4:
+                    penalty = -15.0
+            elif marked_count == 3:  # Fourth move in row
                 if number == 2:
-                    penalty = -10.0  # Penalty for 2 as third move
+                    penalty = -20.0  # Jumping to end too fast
 
         return penalty
 
@@ -692,6 +719,11 @@ class AIPlayer(Player):
         """
         Decide whether to make a move in the given stage using strategic considerations.
 
+        Key insight: In Qwixx, it's often better to skip a bad move and preserve flexibility
+        than to make a move that blocks future opportunities. Only the active player gets
+        a penalty for not making ANY move across both stages, so non-active players should
+        be very selective.
+
         Args:
             game: The current game instance
             stage: 1 for white dice sum stage, 2 for colored combination stage
@@ -701,55 +733,78 @@ class AIPlayer(Player):
         """
         scoresheet = self.get_scoresheet()
         penalty_count = scoresheet.penalties
+        is_active_player = self == game.get_current_player()
 
-        # Base probability based on difficulty and stage
-        # Increased Stage 1 probabilities to encourage more active play
-        if self.difficulty == "easy":
-            base_prob = 0.75 if stage == 1 else 0.8
-        elif self.difficulty == "medium":
-            base_prob = 0.85 if stage == 1 else 0.9
-        else:  # hard
-            base_prob = 0.9 if stage == 1 else 0.95
-
-        # Adjust probability based on penalty risk
-        if penalty_count >= 3:
-            base_prob = 0.95  # Almost always try to move when at high penalty risk
-        elif penalty_count >= 2:
-            base_prob = min(base_prob + 0.1, 0.95)  # Increase probability
-        elif penalty_count >= 1:
-            base_prob = min(base_prob + 0.05, 0.9)  # Slight increase
-
-        # Adjust based on available moves quality
+        # Evaluate available moves first
         available_moves = self.get_available_moves(game)
-        best_score = -float("inf")
-        if available_moves:
-            # Evaluate the best available move
-            for color, number in available_moves:
-                if self.difficulty == "hard":
-                    score = self._evaluate_move_advanced(game, color, number)
-                else:
-                    score = self._evaluate_move(game, color, number)
-                best_score = max(best_score, score)
+        if not available_moves:
+            return False
 
-            # If the best move is very good, increase probability
-            if best_score >= 10:
-                base_prob = min(base_prob + 0.1, 0.98)
-            elif best_score >= 5:
-                base_prob = min(base_prob + 0.05, 0.95)
-            elif best_score <= 0:
-                # For Stage 1, be less aggressive about reducing probability
-                if stage == 1:
-                    base_prob = max(
-                        base_prob - 0.05, 0.5
-                    )  # Smaller reduction for Stage 1
-                else:
-                    base_prob = max(
-                        base_prob - 0.1, 0.3
-                    )  # Original reduction for Stage 2
+        # Calculate best move score
+        best_score = -float("inf")
+        for color, number in available_moves:
+            if self.difficulty == "hard":
+                score = self._evaluate_move_advanced(game, color, number)
+            else:
+                score = self._evaluate_move(game, color, number)
+            best_score = max(best_score, score)
+
+        # CRITICAL: Skip threshold - if best move is very bad, skip it
+        skip_threshold = self._get_skip_threshold(penalty_count, is_active_player, stage)
+
+        if best_score < skip_threshold:
+            self.logger.debug(
+                f"{self.name} skipping - best score {best_score:.1f} below threshold {skip_threshold:.1f}"
+            )
+            log_game_event(
+                "AI_STAGE_DECISION",
+                f"{self.name} will skip in stage {stage} (bad move quality)",
+                ai_player=self.name,
+                stage=stage,
+                decision="skip",
+                probability=0.0,
+                best_move_score=best_score,
+                skip_threshold=skip_threshold,
+                penalty_count=penalty_count,
+                available_moves_count=len(available_moves),
+            )
+            return False
+
+        # Base probability based on difficulty and move quality
+        if self.difficulty == "easy":
+            base_prob = 0.6 if stage == 1 else 0.7
+        elif self.difficulty == "medium":
+            base_prob = 0.5 if stage == 1 else 0.6
+        else:  # hard - most selective
+            base_prob = 0.4 if stage == 1 else 0.5
+
+        # Adjust probability based on move quality
+        if best_score >= 15:
+            base_prob = 0.95  # Excellent move - almost always take it
+        elif best_score >= 10:
+            base_prob = min(base_prob + 0.35, 0.9)
+        elif best_score >= 5:
+            base_prob = min(base_prob + 0.25, 0.8)
+        elif best_score >= 0:
+            base_prob = min(base_prob + 0.1, 0.6)
+        # If score is negative but above skip threshold, keep base_prob low
+
+        # Adjust for penalty risk - active player needs to make moves to avoid penalties
+        if is_active_player:
+            if penalty_count >= 3:
+                base_prob = max(base_prob, 0.9)  # Desperate - take almost any move
+            elif penalty_count >= 2:
+                base_prob = max(base_prob, 0.7)
+            elif penalty_count >= 1:
+                base_prob = max(base_prob, 0.5)
+
+        # Non-active players should be more selective (they don't get penalties for skipping)
+        if not is_active_player:
+            base_prob = min(base_prob, 0.7)  # Cap probability for non-active players
 
         # Add small random factor to avoid predictability
         random_factor = random.uniform(-0.05, 0.05)
-        final_prob = max(0.1, min(0.98, base_prob + random_factor))
+        final_prob = max(0.05, min(0.95, base_prob + random_factor))
 
         decision = random.random() < final_prob
 
@@ -767,10 +822,46 @@ class AIPlayer(Player):
             probability=final_prob,
             best_move_score=best_score,
             penalty_count=penalty_count,
-            available_moves_count=len(available_moves) if available_moves else 0,
+            available_moves_count=len(available_moves),
         )
 
         return decision
+
+    def _get_skip_threshold(
+        self, penalty_count: int, is_active_player: bool, stage: int
+    ) -> float:
+        """
+        Calculate the score threshold below which moves should be skipped.
+
+        Args:
+            penalty_count: Current number of penalties
+            is_active_player: Whether this AI is the active (rolling) player
+            stage: Current game stage (1 or 2)
+
+        Returns:
+            Threshold score - moves scoring below this should be skipped
+        """
+        # Base thresholds by difficulty - higher = more selective
+        if self.difficulty == "easy":
+            base_threshold = -15.0
+        elif self.difficulty == "medium":
+            base_threshold = -10.0
+        else:  # hard - most selective
+            base_threshold = -5.0
+
+        # Active players need to be less selective to avoid penalties
+        if is_active_player:
+            if penalty_count >= 3:
+                return -100.0  # Take any move to avoid game-ending penalty
+            elif penalty_count >= 2:
+                return base_threshold - 20.0  # Much more lenient
+            elif penalty_count >= 1:
+                return base_threshold - 10.0  # More lenient
+            else:
+                return base_threshold - 5.0  # Slightly more lenient
+
+        # Non-active players can be very selective (no penalty for skipping)
+        return base_threshold
 
     def get_available_moves(self, game) -> List[Tuple[DieColor, int]]:
         """

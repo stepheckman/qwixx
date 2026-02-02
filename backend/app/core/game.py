@@ -73,7 +73,7 @@ class Game:
             # Single player mode: Human player 1 vs AI player 2
             self.players = [
                 Player("Player 1", 0),
-                AIPlayer("AI Player", 1, difficulty=self.ai_strategy),
+                AIPlayer("Auto Player", 1, difficulty=self.ai_strategy),
             ]
             self.logger.info(
                 f"Game setup: 1 human player vs AI ({self.ai_strategy} difficulty)"
