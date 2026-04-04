@@ -1,9 +1,8 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `backend/` contains the FastAPI service. Core game logic lives in `backend/app/core/`, and API routes live in `backend/app/api/`.
+- `backend/` contains the FastAPI service. Core game logic lives in `backend/app/core/`, API routes live in `backend/app/api/`, and tests live in `backend/tests/`.
 - `frontend/` contains the React (Vite) app. UI and API client code live under `frontend/src/`.
-- `tests/` contains Python test scripts and unit tests (some are standalone runners).
 - `logs/` is mounted into the backend container for runtime logs.
 
 ## Build, Test, and Development Commands
@@ -21,9 +20,8 @@
 - There is no repo-wide formatter config; keep changes consistent with surrounding code.
 
 ## Testing Guidelines
-- Backend tests use `pytest` via `just test-backend` and are expected to run in Docker.
-- `tests/` includes `unittest`-style tests and script-style checks (e.g., `tests/test_logging.py`).
-- Name new tests with the `test_*.py` pattern.
+- Backend tests use `pytest` via `just test-backend` and run inside the backend Docker container.
+- New tests should be placed in `backend/tests/` and follow the `test_*.py` naming pattern.
 
 ## Commit & Pull Request Guidelines
 - Commit history shows short, descriptive messages (e.g., “redo front end as web app”); keep messages concise and action-oriented.

@@ -15,7 +15,7 @@ docker-build:
 
 # Run backend tests
 test-backend:
-    docker compose run --rm backend pytest
+    docker compose run --rm -e PYTHONPATH=. backend pytest
 
 # Scan logs for errors
 scan-logs:
