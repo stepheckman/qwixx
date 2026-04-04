@@ -2,6 +2,7 @@
 AI Player class for the Qwixx game.
 """
 
+import os
 import random
 from typing import List, Tuple, Optional, Dict
 from .player import Player
@@ -21,14 +22,47 @@ class AIPlayer(Player):
         Args:
             name: The AI player's name
             player_id: Unique identifier for the player
-            difficulty: AI difficulty level ("easy", "medium", "hard")
+            difficulty: AI difficulty level ("easy", "medium", "hard", "rl")
         """
         super().__init__(name, player_id)
         self.difficulty = difficulty
         self.is_ai = True
         self.logger = get_ai_logger()
+        self._rl_model = None
+
+        # Load RL model if using RL difficulty
+        if difficulty == "rl":
+            self._load_rl_model()
 
         self.logger.info(f"Auto Player {name} initialized with {difficulty} difficulty")
+
+    def _load_rl_model(self):
+        """Load the trained RL model for inference."""
+        try:
+            import torch
+            from app.training.model import QwixxNet
+            from app.training.config import TrainingConfig
+
+            config = TrainingConfig()
+            model_path = config.best_model_path
+
+            # Try relative to backend directory
+            if not os.path.exists(model_path):
+                base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                model_path = os.path.join(base, config.best_model_path)
+
+            if os.path.exists(model_path):
+                self._rl_model = QwixxNet(config)
+                checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+                self._rl_model.load_state_dict(checkpoint["model_state_dict"])
+                self._rl_model.eval()
+                self.logger.info(f"Loaded RL model from {model_path}")
+            else:
+                self.logger.warning(f"RL model not found at {model_path}, falling back to hard difficulty")
+                self.difficulty = "hard"
+        except ImportError:
+            self.logger.warning("PyTorch not available, falling back to hard difficulty")
+            self.difficulty = "hard"
 
     def make_move_decision(
         self, game, available_moves: List[Tuple[DieColor, int]]
@@ -56,6 +90,8 @@ class AIPlayer(Player):
             decision = self._make_easy_decision(available_moves)
         elif self.difficulty == "medium":
             decision = self._make_medium_decision(game, available_moves)
+        elif self.difficulty == "rl":
+            decision = self._make_rl_decision(game, available_moves)
         else:  # hard
             decision = self._make_hard_decision(game, available_moves)
 
@@ -147,6 +183,82 @@ class AIPlayer(Player):
                 if len(scored_moves) == 1
                 else (scored_moves[1][1], scored_moves[1][2])
             )
+
+    def _make_rl_decision(
+        self, game, available_moves: List[Tuple[DieColor, int]]
+    ) -> Optional[Tuple[DieColor, int]]:
+        """RL AI: Use trained neural network policy."""
+        if self._rl_model is None or not available_moves:
+            return self._make_hard_decision(game, available_moves)
+
+        try:
+            import torch
+            from app.training.simulator import color_number_to_action, action_to_color_number, COLORS
+            from app.training.state_encoder import get_action_mask, ACTION_SIZE
+
+            # Build valid action indices
+            valid_actions = []
+            for color, number in available_moves:
+                valid_actions.append(color_number_to_action(color, number))
+            valid_actions.append(44)  # skip is always valid
+
+            mask = get_action_mask(valid_actions)
+            mask_t = torch.FloatTensor(mask)
+
+            # Encode state - build a minimal simulator-like object for the encoder
+            state = self._encode_game_state_for_rl(game)
+            state_t = torch.FloatTensor(state)
+
+            action, _, _, _ = self._rl_model.get_action_and_value(state_t, mask_t)
+
+            if action == 44:
+                return None
+
+            result = action_to_color_number(action)
+            if result and result in available_moves:
+                return result
+
+            return None
+        except Exception as e:
+            self.logger.warning(f"RL inference failed: {e}, falling back to hard")
+            return self._make_hard_decision(game, available_moves)
+
+    def _encode_game_state_for_rl(self, game) -> 'np.ndarray':
+        """Encode game state for RL model inference."""
+        import numpy as np
+        from app.training.state_encoder import encode_scoresheet
+
+        player_features = encode_scoresheet(self.get_scoresheet())
+
+        # Find opponent
+        opponent_features = None
+        for p in game.get_players():
+            if p != self:
+                opponent_features = encode_scoresheet(p.get_scoresheet())
+                break
+        if opponent_features is None:
+            opponent_features = np.zeros(57, dtype=np.float32)
+
+        dice = game.get_dice_results() or {}
+        dice_features = np.array([
+            dice.get("white1", 0) / 6.0,
+            dice.get("white2", 0) / 6.0,
+            dice.get("red", 0) / 6.0,
+            dice.get("yellow", 0) / 6.0,
+            dice.get("green", 0) / 6.0,
+            dice.get("blue", 0) / 6.0,
+        ], dtype=np.float32)
+
+        white_sum = (dice.get("white1", 0) + dice.get("white2", 0)) / 12.0
+        is_rolling = 1.0 if self == game.get_current_player() else 0.0
+        stage_val = 1.0 if game.get_state().name == "STAGE_1_MOVES" else 2.0
+
+        return np.concatenate([
+            player_features,
+            opponent_features,
+            dice_features,
+            np.array([white_sum, is_rolling, stage_val / 2.0], dtype=np.float32),
+        ])
 
     def _evaluate_move(self, game, color: DieColor, number: int) -> float:
         """

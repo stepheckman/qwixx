@@ -305,31 +305,34 @@ class Game:
 
         # Mark the number
         if player.get_scoresheet().mark_number(color, number):
-            # Record the move type for tracking
+            # Record the move type for tracking based on current stage
             white_sum = self.dice_results["white1"] + self.dice_results["white2"]
             move_type = "unknown"
             stage = 0
 
-            if number == white_sum:
+            if self.state == GameState.STAGE_1_MOVES:
+                # Stage 1: always a white sum move
                 player.record_white_sum_move()
                 move_type = "white_sum"
-                # Track stage-specific moves for rolling player
-                if (
-                    self.state == GameState.STAGE_1_MOVES
-                    and player == self.get_current_player()
-                ):
+                stage = 1
+                if player == self.get_current_player():
                     self.rolling_player_made_stage_1_move = True
-                    stage = 1
-            elif player == self.get_current_player():
-                # This must be a colored combination move
-                white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
-                if color in white_colored_sums and number in white_colored_sums[color]:
-                    player.record_colored_combination_move()
-                    move_type = "colored_combination"
-                    # Track stage-specific moves
-                    if self.state == GameState.STAGE_2_MOVES:
-                        self.rolling_player_made_stage_2_move = True
-                        stage = 2
+            elif self.state == GameState.STAGE_2_MOVES and player == self.get_current_player():
+                # Stage 2: always a colored combination move
+                player.record_colored_combination_move()
+                move_type = "colored_combination"
+                stage = 2
+                self.rolling_player_made_stage_2_move = True
+            elif self.state == GameState.WAITING_FOR_MOVES:
+                # Legacy state: determine by matching
+                if number == white_sum:
+                    player.record_white_sum_move()
+                    move_type = "white_sum"
+                elif player == self.get_current_player():
+                    white_colored_sums = self.dice_roller.get_white_plus_colored_sums()
+                    if color in white_colored_sums and number in white_colored_sums[color]:
+                        player.record_colored_combination_move()
+                        move_type = "colored_combination"
 
             # Log the player move
             self.logger.info(
@@ -563,80 +566,81 @@ class Game:
 
         return max(self.players, key=lambda p: p.get_total_score())
 
-    def update(self) -> None:
-        """Update game state."""
-        # Handle AI player moves
-        self.handle_ai_moves()
+    def auto_play_ai(self) -> None:
+        """
+        Process AI moves synchronously for the current game state.
+        Called after each API action to let AI players take their turns.
+        Loops until a human player needs to act or the game is over.
+        """
+        max_iterations = 20  # Safety limit to prevent infinite loops
+        iterations = 0
 
-    def handle_ai_moves(self) -> None:
-        """Handle AI player decision making."""
-        current_player = self.get_current_player()
+        while iterations < max_iterations and self.state != GameState.GAME_OVER:
+            iterations += 1
+            made_progress = False
 
-        # Only process AI moves if it's an AI player's turn and in appropriate states
-        if not hasattr(current_player, "is_ai") or not current_player.is_ai:
-            return
+            # If it's an AI player's turn and we're waiting for roll, auto-roll
+            current_player = self.get_current_player()
+            if self.state == GameState.WAITING_FOR_ROLL:
+                if hasattr(current_player, "is_ai") and current_player.is_ai:
+                    self.roll_dice()
+                    made_progress = True
+                else:
+                    break  # Human needs to roll
 
-        game_state = self.get_state()
+            # Stage 1: Let all AI players make their moves
+            if self.state == GameState.STAGE_1_MOVES:
+                ai_acted = self._process_ai_stage_1()
+                if ai_acted:
+                    made_progress = True
+                # Check if only human players remain to act in stage 1
+                has_pending_human = False
+                for player in self.players:
+                    if player.get_id() not in self.stage_1_players_finished:
+                        if not (hasattr(player, "is_ai") and player.is_ai):
+                            has_pending_human = True
+                            break
+                if has_pending_human:
+                    break  # Human needs to act in stage 1
 
-        # Handle AI moves based on game state
-        if game_state == GameState.WAITING_FOR_ROLL:
-            # AI should roll dice automatically after a short delay
-            self.ai_move_timer += 1
-            if self.ai_move_timer >= self.ai_move_delay:
-                self.roll_dice()
-                self.ai_move_timer = 0
+            # Stage 2: Let AI rolling player make their move
+            if self.state == GameState.STAGE_2_MOVES:
+                current_player = self.get_current_player()
+                if hasattr(current_player, "is_ai") and current_player.is_ai:
+                    self._process_ai_stage_2()
+                    made_progress = True
+                else:
+                    break  # Human needs to act in stage 2
 
-        elif game_state == GameState.STAGE_1_MOVES:
-            # AI decides whether to make a move in stage 1
-            self.ai_move_timer += 1
-            if (
-                self.ai_move_timer >= self.ai_move_delay // 2
-            ):  # Faster for move decisions
-                self.handle_ai_stage_1_move()
-                self.ai_move_timer = 0
+            if not made_progress:
+                break
 
-        elif game_state == GameState.STAGE_2_MOVES:
-            # AI decides whether to make a move in stage 2 (only if it's the rolling player)
-            if current_player == self.get_current_player():
-                self.ai_move_timer += 1
-                if self.ai_move_timer >= self.ai_move_delay // 2:
-                    self.handle_ai_stage_2_move()
-                    self.ai_move_timer = 0
-
-    def handle_ai_stage_1_move(self) -> None:
-        """Handle AI decision making for stage 1 moves."""
-        # Check if any AI players want to make moves
-        ai_players_to_process = []
-
+    def _process_ai_stage_1(self) -> bool:
+        """Process all AI players' Stage 1 moves. Returns True if any AI acted."""
+        acted = False
         for player in self.players:
             if (
                 hasattr(player, "is_ai")
                 and player.is_ai
                 and player.get_id() not in self.stage_1_players_finished
             ):
-                ai_players_to_process.append(player)
+                available_moves = player.get_available_moves(self)
 
-        # Process one AI player at a time
-        if ai_players_to_process:
-            ai_player = ai_players_to_process[0]
-            available_moves = ai_player.get_available_moves(self)
+                if available_moves and player.should_make_move_in_stage(self, 1):
+                    move = player.make_move_decision(self, available_moves)
+                    if move:
+                        color, number = move
+                        if self.try_mark_number(player, color, number):
+                            self.message = f"{player.get_name()} marked {number} in {color.value} row."
 
-            if available_moves and ai_player.should_make_move_in_stage(self, 1):
-                move = ai_player.make_move_decision(self, available_moves)
-                if move:
-                    color, number = move
-                    if self.try_mark_number(ai_player, color, number):
-                        self.message = f"{ai_player.get_name()} marked {number} in {color.value} row."
+                # Mark this AI player as finished with stage 1
+                self.stage_1_players_finished.add(player.get_id())
+                acted = True
 
-            # Mark this AI player as finished with stage 1
-            self.stage_1_players_finished.add(ai_player.get_id())
+        return acted
 
-            # Check if all players are done with stage 1
-            if len(self.stage_1_players_finished) >= len(self.players):
-                self.stage_1_done()
-
-    def handle_ai_stage_2_move(self) -> None:
-        """Handle AI decision making for stage 2 moves."""
+    def _process_ai_stage_2(self) -> None:
+        """Process AI rolling player's Stage 2 move."""
         current_player = self.get_current_player()
 
         if hasattr(current_player, "is_ai") and current_player.is_ai:

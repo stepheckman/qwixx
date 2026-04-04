@@ -28,6 +28,12 @@ class PlayerSchema(BaseModel):
     scoresheet: ScoreSheetSchema
 
 
+class ValidMoveSchema(BaseModel):
+    player_id: int
+    color: str
+    number: int
+
+
 class GameStateSchema(BaseModel):
     state: str
     current_player_index: int
@@ -35,9 +41,11 @@ class GameStateSchema(BaseModel):
     locked_colors: List[str]
     message: str
     players: List[PlayerSchema]
+    valid_moves: List[ValidMoveSchema] = []
 
 
 class MoveRequest(BaseModel):
+    player_id: int
     color: str
     number: int
 
