@@ -4,7 +4,14 @@ import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 const ScoreSheet = ({ player, onMark, isCurrentPlayer }) => {
-    const { scoresheet, name } = player;
+    const name = player.name;
+    const scoresheet = {
+        total_score: player.total_score,
+        penalties: player.penalties,
+        marked_numbers: Object.fromEntries(
+            Object.entries(player.rows).map(([color, row]) => [color, row.marked])
+        ),
+    };
 
     const colors = [
         { name: 'red', label: 'RED', numbers: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },

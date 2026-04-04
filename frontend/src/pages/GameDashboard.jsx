@@ -12,7 +12,11 @@ const GameDashboard = () => {
     const fetchGameState = async () => {
         try {
             const response = await gameApi.getState();
-            setGameState(response.data);
+            if (response.data.error) {
+                setGameState(null);
+            } else {
+                setGameState(response.data);
+            }
             setError(null);
         } catch (err) {
             setError('Failed to fetch game state');
@@ -49,8 +53,9 @@ const GameDashboard = () => {
 
     const handleMark = async (color, number) => {
         try {
-            const response = await gameApi.mark(color, number);
-            setGameState(response.data);
+            const currentPlayerId = gameState.current_player_id;
+            const response = await gameApi.mark(currentPlayerId, color, number);
+            setGameState(response.data.game_state);
         } catch (err) {
             setError(err.response?.data?.detail || 'Invalid move');
         }
@@ -89,7 +94,7 @@ const GameDashboard = () => {
                     <Paper sx={{ p: 2, bgcolor: 'background.paper', borderLeft: '6px solid', borderLeftColor: 'primary.main' }}>
                         <Typography variant="h6">{gameState.message}</Typography>
                         <Typography variant="subtitle2" color="textSecondary">
-                            State: {gameState.state} | Current Player: {gameState.players[gameState.current_player_index].name}
+                            State: {gameState.state} | Current Player: {gameState.players[gameState.current_player_id].name}
                         </Typography>
                     </Paper>
                 </Grid>
@@ -106,7 +111,7 @@ const GameDashboard = () => {
                             key={player.id}
                             player={player}
                             onMark={handleMark}
-                            isCurrentPlayer={gameState.players[gameState.current_player_index].id === player.id}
+                            isCurrentPlayer={gameState.players[gameState.current_player_id].id === player.id}
                         />
                     ))}
                 </Grid>
@@ -131,6 +136,14 @@ const GameDashboard = () => {
                                 disabled={!['STAGE_1_MOVES', 'STAGE_2_MOVES'].includes(gameState.state)}
                             >
                                 Done
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                fullWidth
+                                onClick={handleSetup}
+                            >
+                                New Game
                             </Button>
                         </Box>
                     </Paper>

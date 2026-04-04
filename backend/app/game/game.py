@@ -1,4 +1,3 @@
-```
 """
 Main Game class for the Qwixx game.
 """
