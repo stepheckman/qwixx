@@ -29,8 +29,8 @@ setup:
 # --- RL Training Commands (CLI Based) ---
 
 # Train the RL agent via self-play
-train-rl episodes="50000" eval_interval="1000":
-    cd backend && python -m app.training.play train --episodes {{episodes}} --eval-interval {{eval_interval}}
+train-rl episodes="50000" eval_interval="1000" parallel="" workers="0":
+    cd backend && python -m app.training.play train --episodes {{episodes}} --eval-interval {{eval_interval}} {{parallel}} --workers {{workers}}
 
 # Evaluate the RL agent vs Hard AI
 eval-rl games="500":

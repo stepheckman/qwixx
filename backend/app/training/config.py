@@ -30,6 +30,10 @@ class TrainingConfig:
     eval_interval: int = 1000
     eval_games: int = 100
     save_interval: int = 5000
+    
+    # Scaling (Milestone 3)
+    num_workers: int = 4  # Set higher for servers (e.g. 15 for 16-core machine)
+    use_parallel: bool = False # Default to False for local compatibility
 
     # Self-play
     opponent_update_interval: int = 2000  # Freeze opponent copy every N episodes

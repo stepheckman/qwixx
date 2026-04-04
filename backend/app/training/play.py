@@ -24,6 +24,10 @@ def cmd_train(args):
         config.lr = args.lr
     if args.batch_size:
         config.episodes_per_batch = args.batch_size
+    if args.parallel:
+        config.use_parallel = True
+    if args.workers and args.workers > 0:
+        config.num_workers = args.workers
 
     trainer = PPOTrainer(config)
 
@@ -31,10 +35,13 @@ def cmd_train(args):
         print(f"Resuming from {args.resume}")
         trainer.load_model(args.resume)
 
-    trainer.train(
-        total_episodes=args.episodes,
-        eval_interval=args.eval_interval,
-    )
+    try:
+        trainer.train(
+            total_episodes=args.episodes,
+            eval_interval=args.eval_interval,
+        )
+    finally:
+        trainer.close()
 
 
 def cmd_evaluate(args):
@@ -142,6 +149,8 @@ def main():
     train_parser.add_argument("--resume", type=str, default=None, help="Resume from checkpoint")
     train_parser.add_argument("--lr", type=float, default=None, help="Learning rate")
     train_parser.add_argument("--batch-size", type=int, default=None, help="Episodes per batch")
+    train_parser.add_argument("--parallel", action="store_true", help="Use parallel simulator")
+    train_parser.add_argument("--workers", type=int, default=0, help="Number of workers for parallel simulation")
 
     # Evaluate
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate model vs heuristic AI")

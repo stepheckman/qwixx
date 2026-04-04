@@ -14,6 +14,7 @@ from .config import TrainingConfig
 from .model import QwixxNet
 from .simulator import QwixxSimulator, action_to_color_number, color_number_to_action, COLORS
 from .state_encoder import encode_simulator_state, get_action_mask, STATE_SIZE, ACTION_SIZE
+from .parallel_sim import ParallelSimulator
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -57,10 +58,21 @@ class PPOTrainer:
         self.episode_count = 0
         self.best_win_rate = 0.0
         
+        # Parallel simulator (Milestone 3)
+        self.parallel_sim = None
+        if self.config.use_parallel:
+            self.parallel_sim = ParallelSimulator(self.config, num_workers=self.config.num_workers)
+            print(f"Parallel training enabled with {self.config.num_workers} workers.")
+
         # TensorBoard logger
         log_dir = os.path.join("logs/runs", self.config.run_name)
         self.writer = SummaryWriter(log_dir)
         print(f"TensorBoard logging to {log_dir}")
+
+    def close(self):
+        """Clean up parallel simulator processes."""
+        if self.parallel_sim:
+            self.parallel_sim.close()
 
     def make_policy_fn(self, model: QwixxNet, collect_exp: Optional[List] = None):
         """Create a policy function for the simulator."""
@@ -92,8 +104,39 @@ class PPOTrainer:
     def collect_batch(self) -> Dict:
         """
         Collect a batch of self-play games.
-        Returns experience buffer and stats.
+        Supports both sequential and parallel collection.
         """
+        if self.config.use_parallel and self.parallel_sim:
+            return self._collect_batch_parallel()
+        else:
+            return self._collect_batch_sequential()
+
+    def _collect_batch_parallel(self) -> Dict:
+        """Collect batch using multiprocessing."""
+        res = self.parallel_sim.collect_batch(
+            self.policy, self.opponent, self.config.episodes_per_batch
+        )
+        
+        # Convert dicts to Experience objects
+        experiences = []
+        for e_dict in res["experiences"]:
+            experiences.append(Experience(
+                state=e_dict["state"],
+                action=e_dict["action"],
+                action_mask=e_dict["action_mask"],
+                log_prob=e_dict["log_prob"],
+                reward=e_dict["reward"],
+                value=e_dict["value"],
+                done=e_dict["done"]
+            ))
+            
+        return {
+            "experiences": experiences,
+            "stats": res["stats"]
+        }
+
+    def _collect_batch_sequential(self) -> Dict:
+        """Original sequential experience collection."""
         all_experiences: List[Experience] = []
         wins = 0
         losses = 0
@@ -206,6 +249,13 @@ class PPOTrainer:
         # Normalize advantages
         if len(advantages_t) > 1:
             advantages_t = (advantages_t - advantages_t.mean()) / (advantages_t.std() + 1e-8)
+
+        # Check for NaNs in inputs or weights
+        has_nan_weights = any(torch.isnan(p).any() for p in self.policy.parameters())
+        if torch.isnan(states).any() or torch.isnan(actions).any() or torch.isnan(old_log_probs).any() or has_nan_weights:
+            print("WARNING: NaN detected in PPO batch or weights! Skipping update.")
+            if has_nan_weights: print("  -> Policy weights contain NaN!")
+            return {}
 
         total_policy_loss = 0.0
         total_value_loss = 0.0
