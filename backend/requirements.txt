@@ -8,3 +8,4 @@ python-multipart==0.0.6
 loguru>=0.7.0
 numpy>=1.24.0
 torch>=2.0.0
+tensorboard>=2.15.0

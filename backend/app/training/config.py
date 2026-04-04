@@ -8,7 +8,7 @@ from dataclasses import dataclass
 @dataclass
 class TrainingConfig:
     # Network architecture
-    state_size: int = 123
+    state_size: int = 172
     action_size: int = 45  # 4 colors × 11 numbers + 1 skip
     hidden_size: int = 256
     hidden_size_2: int = 128
@@ -44,3 +44,4 @@ class TrainingConfig:
     # Paths
     model_dir: str = "app/training/models"
     best_model_path: str = "app/training/models/best_model.pt"
+    run_name: str = "ppo_qwixx_v2"

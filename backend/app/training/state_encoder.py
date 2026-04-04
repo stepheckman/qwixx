@@ -8,7 +8,7 @@ from typing import List
 from app.core.die import DieColor
 
 COLORS = [DieColor.RED, DieColor.YELLOW, DieColor.GREEN, DieColor.BLUE]
-STATE_SIZE = 123
+STATE_SIZE = 172
 ACTION_SIZE = 45  # 4 colors × 11 numbers + 1 skip
 
 
@@ -37,31 +37,38 @@ def encode_scoresheet(scoresheet) -> np.ndarray:
     return np.array(features, dtype=np.float32)
 
 
-def encode_state(simulator, player_id: int, stage: int) -> np.ndarray:
+def encode_state(
+    player_scoresheet,
+    opponent_scoresheet,
+    dice_results: dict,
+    is_rolling: bool,
+    stage: int,
+    locked_colors: set,
+    turn_count: int = 0,
+    max_turns: int = 200,
+) -> np.ndarray:
     """
     Encode the full game state from a player's perspective.
 
-    Returns feature vector of size STATE_SIZE (123):
+    Returns feature vector of size STATE_SIZE (172):
     - Player scoresheet: 57 features
     - Opponent scoresheet: 57 features
     - Dice values: 6 features
     - White sum: 1 feature
     - Is rolling player: 1 feature
     - Stage: 1 feature
+    - Dead numbers bitmask: 44 features
+    - Game progress: 1 feature
+    - Locked colors: 4 features
 
-    Total: 123
+    Total: 172
     """
-    player = simulator.players[player_id]
-    opponent = simulator.players[1 - player_id]
-
-    # Player's own scoresheet (57 features)
-    player_features = encode_scoresheet(player.scoresheet)
-
-    # Opponent's scoresheet (57 features)
-    opponent_features = encode_scoresheet(opponent.scoresheet)
+    # Player and Opponent scoresheets (114 features)
+    player_features = encode_scoresheet(player_scoresheet)
+    opponent_features = encode_scoresheet(opponent_scoresheet)
 
     # Dice values normalized to 0-1 (6 features)
-    dice = simulator.dice_results or {}
+    dice = dice_results or {}
     dice_features = np.array([
         dice.get("white1", 0) / 6.0,
         dice.get("white2", 0) / 6.0,
@@ -76,25 +83,61 @@ def encode_state(simulator, player_id: int, stage: int) -> np.ndarray:
     white_sum_feature = np.array([white_sum], dtype=np.float32)
 
     # Is rolling player (1 feature)
-    is_rolling = np.array(
-        [1.0 if player_id == simulator.current_player_idx else 0.0],
-        dtype=np.float32,
-    )
+    is_rolling_feature = np.array([1.0 if is_rolling else 0.0], dtype=np.float32)
 
     # Stage (1 feature, normalized)
     stage_feature = np.array([stage / 2.0], dtype=np.float32)
 
+    # Dead numbers bitmask (44 features)
+    # A number is dead if it's behind the rightmost marked number in its row
+    dead_features = []
+    for color in COLORS:
+        row = player_scoresheet.rows[color]
+        rightmost = row.rightmost_marked
+        for i, number in enumerate(row.numbers):
+            # In Qwixx, once you mark a number, all numbers to its left are dead.
+            # rightmost is the index in row.numbers (0-10)
+            is_dead = 1.0 if (rightmost >= 0 and i < rightmost and number not in row.marked) else 0.0
+            dead_features.append(is_dead)
+    dead_features = np.array(dead_features, dtype=np.float32)
+
+    # Game progress (1 feature)
+    progress_feature = np.array([turn_count / max_turns], dtype=np.float32)
+
+    # Global locked colors (4 features)
+    locked_features = np.array([1.0 if c in locked_colors else 0.0 for c in COLORS], dtype=np.float32)
+
     state = np.concatenate([
-        player_features,     # 57
-        opponent_features,   # 57
-        dice_features,       # 6
-        white_sum_feature,   # 1
-        is_rolling,          # 1
-        stage_feature,       # 1
+        player_features,       # 57
+        opponent_features,     # 57
+        dice_features,         # 6
+        white_sum_feature,     # 1
+        is_rolling_feature,    # 1
+        stage_feature,         # 1
+        dead_features,         # 44
+        progress_feature,      # 1
+        locked_features,       # 4
     ])
 
     assert state.shape[0] == STATE_SIZE, f"Expected {STATE_SIZE}, got {state.shape[0]}"
     return state
+
+
+def encode_simulator_state(simulator, player_id: int, stage: int) -> np.ndarray:
+    """Helper to encode state from the simulator object."""
+    player = simulator.players[player_id]
+    opponent = simulator.players[1 - player_id]
+    
+    return encode_state(
+        player.scoresheet,
+        opponent.scoresheet,
+        simulator.dice_results,
+        player_id == simulator.current_player_idx,
+        stage,
+        simulator.locked_colors,
+        simulator.turn_count,
+        simulator.max_turns
+    )
 
 
 def get_action_mask(valid_actions: List[int]) -> np.ndarray:

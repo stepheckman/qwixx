@@ -226,39 +226,38 @@ class AIPlayer(Player):
     def _encode_game_state_for_rl(self, game) -> 'np.ndarray':
         """Encode game state for RL model inference."""
         import numpy as np
-        from app.training.state_encoder import encode_scoresheet
-
-        player_features = encode_scoresheet(self.get_scoresheet())
+        from app.training.state_encoder import encode_state
+        from app.core.scoresheet import Scoresheet
 
         # Find opponent
-        opponent_features = None
+        opponent_scoresheet = None
         for p in game.get_players():
             if p != self:
-                opponent_features = encode_scoresheet(p.get_scoresheet())
+                opponent_scoresheet = p.get_scoresheet()
                 break
-        if opponent_features is None:
-            opponent_features = np.zeros(57, dtype=np.float32)
+        
+        # Fallback for empty opponent or setup phase
+        if opponent_scoresheet is None:
+            opponent_scoresheet = Scoresheet()
 
-        dice = game.get_dice_results() or {}
-        dice_features = np.array([
-            dice.get("white1", 0) / 6.0,
-            dice.get("white2", 0) / 6.0,
-            dice.get("red", 0) / 6.0,
-            dice.get("yellow", 0) / 6.0,
-            dice.get("green", 0) / 6.0,
-            dice.get("blue", 0) / 6.0,
-        ], dtype=np.float32)
+        # Determine stage (1 or 2)
+        game_state_name = game.get_state().name
+        stage_val = 1 if game_state_name == "STAGE_1_MOVES" else 2
+        
+        # Extract turn info if available (Simulator compatibility)
+        turn_count = getattr(game, "turn_count", 0)
+        max_turns = getattr(game, "max_turns", 200)
 
-        white_sum = (dice.get("white1", 0) + dice.get("white2", 0)) / 12.0
-        is_rolling = 1.0 if self == game.get_current_player() else 0.0
-        stage_val = 1.0 if game.get_state().name == "STAGE_1_MOVES" else 2.0
-
-        return np.concatenate([
-            player_features,
-            opponent_features,
-            dice_features,
-            np.array([white_sum, is_rolling, stage_val / 2.0], dtype=np.float32),
-        ])
+        return encode_state(
+            player_scoresheet=self.get_scoresheet(),
+            opponent_scoresheet=opponent_scoresheet,
+            dice_results=game.get_dice_results(),
+            is_rolling=(self == game.get_current_player()),
+            stage=stage_val,
+            locked_colors=game.get_locked_colors(),
+            turn_count=turn_count,
+            max_turns=max_turns
+        )
 
     def _evaluate_move(self, game, color: DieColor, number: int) -> float:
         """

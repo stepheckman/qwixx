@@ -13,7 +13,8 @@ from typing import List, Dict, Optional
 from .config import TrainingConfig
 from .model import QwixxNet
 from .simulator import QwixxSimulator, action_to_color_number, color_number_to_action, COLORS
-from .state_encoder import encode_state, get_action_mask, STATE_SIZE, ACTION_SIZE
+from .state_encoder import encode_simulator_state, get_action_mask, STATE_SIZE, ACTION_SIZE
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Experience:
@@ -55,12 +56,17 @@ class PPOTrainer:
         self.simulator = QwixxSimulator()
         self.episode_count = 0
         self.best_win_rate = 0.0
+        
+        # TensorBoard logger
+        log_dir = os.path.join("logs/runs", self.config.run_name)
+        self.writer = SummaryWriter(log_dir)
+        print(f"TensorBoard logging to {log_dir}")
 
     def make_policy_fn(self, model: QwixxNet, collect_exp: Optional[List] = None):
         """Create a policy function for the simulator."""
 
         def policy_fn(sim, player_id, valid_actions, stage):
-            state = encode_state(sim, player_id, stage)
+            state = encode_simulator_state(sim, player_id, stage)
             mask = get_action_mask(valid_actions)
 
             state_t = torch.FloatTensor(state).to(self.device)
@@ -256,6 +262,10 @@ class PPOTrainer:
                 total_entropy += entropy.mean().item()
                 update_count += 1
 
+        self.writer.add_scalar("Loss/Policy", total_policy_loss / max(1, update_count), self.episode_count)
+        self.writer.add_scalar("Loss/Value", total_value_loss / max(1, update_count), self.episode_count)
+        self.writer.add_scalar("Loss/Entropy", total_entropy / max(1, update_count), self.episode_count)
+
         return {
             "policy_loss": total_policy_loss / max(1, update_count),
             "value_loss": total_value_loss / max(1, update_count),
@@ -399,6 +409,11 @@ class PPOTrainer:
                 f"Ent: {loss_stats.get('entropy', 0):.4f}"
             )
 
+            # TensorBoard metrics
+            self.writer.add_scalar("Game/WinRate_Batch", stats['win_rate'], self.episode_count)
+            self.writer.add_scalar("Game/AvgScore_Batch", stats['avg_score'], self.episode_count)
+            self.writer.add_scalar("Game/NumExperiences", stats['num_experiences'], self.episode_count)
+
             # Update frozen opponent periodically
             if self.episode_count % self.config.opponent_update_interval < self.config.episodes_per_batch:
                 self.opponent.load_state_dict(self.policy.state_dict())
@@ -418,6 +433,9 @@ class PPOTrainer:
                     self.best_win_rate = eval_stats["win_rate"]
                     self.save_model(self.config.best_model_path)
                     print(f"  ✓ New best model saved (win rate: {self.best_win_rate:.1%})")
+                
+                self.writer.add_scalar("Eval/WinRate", eval_stats['win_rate'], self.episode_count)
+                self.writer.add_scalar("Eval/AvgScore", eval_stats['avg_score'], self.episode_count)
 
             # Periodic save
             if self.episode_count % self.config.save_interval < self.config.episodes_per_batch:
