@@ -1,7 +1,8 @@
-import multiprocessing as mp
+import torch.multiprocessing as mp
 import numpy as np
 from typing import List, Dict, Callable, Optional
 import torch
+import traceback
 
 from .simulator import QwixxSimulator, color_number_to_action
 from .state_encoder import encode_simulator_state, get_action_mask
@@ -18,6 +19,9 @@ def _rollout_worker(
     """
     Worker function to run a batch of rollouts in a subprocess.
     """
+    # Crucial: limit threads in subprocesses to avoid deadlocks
+    torch.set_num_threads(1)
+    
     if seed is not None:
         import random
         random.seed(seed)
@@ -41,27 +45,28 @@ def _rollout_worker(
     sim = QwixxSimulator()
     all_results = []
     
-    for _ in range(num_episodes):
-        # Create policy functions
-        def make_policy(model):
-            def policy_fn(s, pid, valid, stage):
-                state = encode_simulator_state(s, pid, stage)
-                mask = get_action_mask(valid)
-                state_t = torch.FloatTensor(state).to(device)
-                mask_t = torch.FloatTensor(mask).to(device)
-                
-                # In worker, we just need the action, not the full experience yet
-                # The experience collection might need to happen here if we want PPO
-                # But to keep it simple, we return the action and trajectory info
-                action, log_prob, entropy, value = model.get_action_and_value(state_t, mask_t)
-                
-                return action, log_prob, value, state, mask
+    try:
+        for _ in range(num_episodes):
+            # Create policy functions
+            def make_policy(model):
+                def policy_fn(s, pid, valid, stage):
+                    state = encode_simulator_state(s, pid, stage)
+                    mask = get_action_mask(valid)
+                    state_t = torch.FloatTensor(state).to(device)
+                    mask_t = torch.FloatTensor(mask).to(device)
+                    
+                    action, log_prob, entropy, value = model.get_action_and_value(state_t, mask_t)
+                    
+                    return action, log_prob, value, state, mask
 
-            return policy_fn
+                return policy_fn
 
-        # Special rollout that returns experiences
-        result = _rollout_with_experiences(sim, make_policy(policy), make_policy(opponent), config)
-        all_results.append(result)
+            # Special rollout that returns experiences
+            result = _rollout_with_experiences(sim, make_policy(policy), make_policy(opponent), config)
+            all_results.append(result)
+    except Exception as e:
+        print(f"ERROR in worker rollout: {e}")
+        traceback.print_exc()
         
     return all_results
 
@@ -221,6 +226,13 @@ class ParallelSimulator:
     def __init__(self, config: TrainingConfig, num_workers: int = 4):
         self.config = config
         self.num_workers = num_workers
+        
+        # Use spawn or forkserver for safety on Unix
+        try:
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass # already set
+            
         self.pool = mp.Pool(processes=num_workers)
 
     def collect_batch(self, policy: QwixxNet, opponent: QwixxNet, episodes_per_batch: int) -> Dict:

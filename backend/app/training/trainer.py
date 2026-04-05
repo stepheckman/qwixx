@@ -113,6 +113,7 @@ class PPOTrainer:
 
     def _collect_batch_parallel(self) -> Dict:
         """Collect batch using multiprocessing."""
+        print(f"Collecting {self.config.episodes_per_batch} episodes using {self.config.num_workers} workers...", flush=True)
         res = self.parallel_sim.collect_batch(
             self.policy, self.opponent, self.config.episodes_per_batch
         )
