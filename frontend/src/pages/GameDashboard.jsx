@@ -3,6 +3,7 @@ import { Paper, Typography, Button, Box, Alert, CircularProgress } from '@mui/ma
 import { gameApi } from '../api/client';
 import ScoreSheet from '../components/ScoreSheet';
 import DiceDisplay from '../components/DiceDisplay';
+import GameSetup from '../components/GameSetup';
 
 const GameDashboard = () => {
     const [gameState, setGameState] = useState(null);
@@ -30,16 +31,21 @@ const GameDashboard = () => {
         fetchGameState();
     }, []);
 
-    const handleSetup = async () => {
+    const handleSetup = async (numPlayers = 1, aiStrategy = 'medium') => {
         setLoading(true);
         try {
-            const response = await gameApi.setup(1, 'medium');
+            const response = await gameApi.setup(numPlayers, aiStrategy);
             setGameState(response.data);
         } catch (err) {
             setError('Failed to setup game');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleNewGame = () => {
+        setGameState(null);
+        setError(null);
     };
 
     const handleRoll = async () => {
@@ -77,12 +83,7 @@ const GameDashboard = () => {
 
     if (!gameState) return (
         <Box sx={{ maxWidth: 600, mx: 'auto', p: 3 }}>
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h4" gutterBottom>Qwixx</Typography>
-                <Button variant="contained" color="primary" onClick={handleSetup} size="large">
-                    Start New Game
-                </Button>
-            </Paper>
+            <GameSetup onStartGame={handleSetup} />
         </Box>
     );
 
@@ -126,7 +127,7 @@ const GameDashboard = () => {
                     <Button
                         variant="contained"
                         color="primary"
-                        onClick={handleSetup}
+                        onClick={handleNewGame}
                         sx={{ mt: 2 }}
                         size="large"
                     >
@@ -182,7 +183,7 @@ const GameDashboard = () => {
                             variant="outlined"
                             color="error"
                             fullWidth
-                            onClick={handleSetup}
+                            onClick={handleNewGame}
                         >
                             New Game
                         </Button>

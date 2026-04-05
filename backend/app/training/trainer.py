@@ -13,7 +13,9 @@ from typing import List, Dict, Optional
 from .config import TrainingConfig
 from .model import QwixxNet
 from .simulator import QwixxSimulator, action_to_color_number, color_number_to_action, COLORS
-from .state_encoder import encode_state, get_action_mask, STATE_SIZE, ACTION_SIZE
+from .state_encoder import encode_simulator_state, get_action_mask, STATE_SIZE, ACTION_SIZE
+from .parallel_sim import ParallelSimulator
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Experience:
@@ -56,11 +58,28 @@ class PPOTrainer:
         self.episode_count = 0
         self.best_win_rate = 0.0
 
+        # Parallel simulator (Milestone 3)
+        self.parallel_sim = None
+        if self.config.use_parallel:
+            self.parallel_sim = ParallelSimulator(self.config, num_workers=self.config.num_workers)
+            print(f"Parallel training enabled with {self.config.num_workers} workers.")
+
+        # TensorBoard logger
+        log_dir = os.path.join("logs/runs", self.config.run_name)
+        self.writer = SummaryWriter(log_dir)
+        print(f"TensorBoard logging to {log_dir}")
+        print(f"Device: {self.device}")
+
+    def close(self):
+        """Clean up parallel simulator processes."""
+        if self.parallel_sim:
+            self.parallel_sim.close()
+
     def make_policy_fn(self, model: QwixxNet, collect_exp: Optional[List] = None):
         """Create a policy function for the simulator."""
 
         def policy_fn(sim, player_id, valid_actions, stage):
-            state = encode_state(sim, player_id, stage)
+            state = encode_simulator_state(sim, player_id, stage)
             mask = get_action_mask(valid_actions)
 
             state_t = torch.FloatTensor(state).to(self.device)
@@ -86,8 +105,40 @@ class PPOTrainer:
     def collect_batch(self) -> Dict:
         """
         Collect a batch of self-play games.
-        Returns experience buffer and stats.
+        Supports both sequential and parallel collection.
         """
+        if self.config.use_parallel and self.parallel_sim:
+            return self._collect_batch_parallel()
+        else:
+            return self._collect_batch_sequential()
+
+    def _collect_batch_parallel(self) -> Dict:
+        """Collect batch using multiprocessing."""
+        print(f"Collecting {self.config.episodes_per_batch} episodes using {self.config.num_workers} workers...", flush=True)
+        res = self.parallel_sim.collect_batch(
+            self.policy, self.opponent, self.config.episodes_per_batch
+        )
+        
+        # Convert dicts to Experience objects
+        experiences = []
+        for e_dict in res["experiences"]:
+            experiences.append(Experience(
+                state=e_dict["state"],
+                action=e_dict["action"],
+                action_mask=e_dict["action_mask"],
+                log_prob=e_dict["log_prob"],
+                reward=e_dict["reward"],
+                value=e_dict["value"],
+                done=e_dict["done"]
+            ))
+            
+        return {
+            "experiences": experiences,
+            "stats": res["stats"]
+        }
+
+    def _collect_batch_sequential(self) -> Dict:
+        """Original sequential experience collection."""
         all_experiences: List[Experience] = []
         wins = 0
         losses = 0
@@ -201,6 +252,13 @@ class PPOTrainer:
         if len(advantages_t) > 1:
             advantages_t = (advantages_t - advantages_t.mean()) / (advantages_t.std() + 1e-8)
 
+        # Check for NaNs in inputs or weights
+        has_nan_weights = any(torch.isnan(p).any() for p in self.policy.parameters())
+        if torch.isnan(states).any() or torch.isnan(actions).any() or torch.isnan(old_log_probs).any() or has_nan_weights:
+            print("WARNING: NaN detected in PPO batch or weights! Skipping update.")
+            if has_nan_weights: print("  -> Policy weights contain NaN!")
+            return {}
+
         total_policy_loss = 0.0
         total_value_loss = 0.0
         total_entropy = 0.0
@@ -255,6 +313,10 @@ class PPOTrainer:
                 total_value_loss += value_loss.item()
                 total_entropy += entropy.mean().item()
                 update_count += 1
+
+        self.writer.add_scalar("Loss/Policy", total_policy_loss / max(1, update_count), self.episode_count)
+        self.writer.add_scalar("Loss/Value", total_value_loss / max(1, update_count), self.episode_count)
+        self.writer.add_scalar("Loss/Entropy", total_entropy / max(1, update_count), self.episode_count)
 
         return {
             "policy_loss": total_policy_loss / max(1, update_count),
@@ -359,6 +421,22 @@ class PPOTrainer:
         if "best_win_rate" in checkpoint:
             self.best_win_rate = checkpoint["best_win_rate"]
 
+    def _get_entropy_coef(self, progress: float) -> float:
+        """Anneal entropy coefficient from entropy_coef to entropy_coef_min over training."""
+        start = self.config.entropy_coef
+        end = self.config.entropy_coef_min
+        return end + (start - end) * (1.0 - progress)
+
+    def _update_lr(self, progress: float):
+        """Cosine annealing learning rate schedule."""
+        import math
+        lr_max = self.config.lr
+        lr_min = self.config.lr_min
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * progress))
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
+
     def train(self, total_episodes: int = None, eval_interval: int = None, callback=None):
         """
         Main training loop.
@@ -373,9 +451,21 @@ class PPOTrainer:
 
         print(f"Starting PPO training for {total} episodes on {self.device}")
         print(f"Batch size: {self.config.episodes_per_batch}, Eval every: {eval_every}")
+        print(f"LR: {self.config.lr} → {self.config.lr_min} (cosine)")
+        print(f"Entropy: {self.config.entropy_coef} → {self.config.entropy_coef_min} (linear)")
+        if self.episode_count > 0:
+            print(f"Resuming from episode {self.episode_count}")
         print()
 
         while self.episode_count < total:
+            # Compute training progress (0→1) for schedules
+            progress = min(1.0, self.episode_count / total)
+
+            # Update schedules
+            current_lr = self._update_lr(progress)
+            current_entropy = self._get_entropy_coef(progress)
+            self.config.entropy_coef = current_entropy
+
             # Collect experience
             batch = self.collect_batch()
             experiences = batch["experiences"]
@@ -396,8 +486,16 @@ class PPOTrainer:
                 f"Score: {stats['avg_score']:>6.1f} | "
                 f"PL: {loss_stats.get('policy_loss', 0):.4f} | "
                 f"VL: {loss_stats.get('value_loss', 0):.4f} | "
-                f"Ent: {loss_stats.get('entropy', 0):.4f}"
+                f"Ent: {loss_stats.get('entropy', 0):.4f} | "
+                f"LR: {current_lr:.1e}"
             )
+
+            # TensorBoard metrics
+            self.writer.add_scalar("Game/WinRate_Batch", stats['win_rate'], self.episode_count)
+            self.writer.add_scalar("Game/AvgScore_Batch", stats['avg_score'], self.episode_count)
+            self.writer.add_scalar("Game/NumExperiences", stats['num_experiences'], self.episode_count)
+            self.writer.add_scalar("Schedule/LR", current_lr, self.episode_count)
+            self.writer.add_scalar("Schedule/EntropyCoef", current_entropy, self.episode_count)
 
             # Update frozen opponent periodically
             if self.episode_count % self.config.opponent_update_interval < self.config.episodes_per_batch:
@@ -418,6 +516,9 @@ class PPOTrainer:
                     self.best_win_rate = eval_stats["win_rate"]
                     self.save_model(self.config.best_model_path)
                     print(f"  ✓ New best model saved (win rate: {self.best_win_rate:.1%})")
+
+                self.writer.add_scalar("Eval/WinRate", eval_stats['win_rate'], self.episode_count)
+                self.writer.add_scalar("Eval/AvgScore", eval_stats['avg_score'], self.episode_count)
 
             # Periodic save
             if self.episode_count % self.config.save_interval < self.config.episodes_per_batch:

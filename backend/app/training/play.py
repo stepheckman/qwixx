@@ -19,7 +19,18 @@ def cmd_train(args):
     from app.training.config import TrainingConfig
     from app.training.trainer import PPOTrainer
 
-    config = TrainingConfig()
+    if args.server:
+        workers = args.workers if args.workers > 0 else 15
+        config = TrainingConfig.server(workers=workers)
+        print(f"Using server preset: {workers} workers, batch={config.episodes_per_batch}, "
+              f"parallel={config.use_parallel}")
+    else:
+        config = TrainingConfig()
+        if args.parallel:
+            config.use_parallel = True
+        if args.workers and args.workers > 0:
+            config.num_workers = args.workers
+
     if args.lr:
         config.lr = args.lr
     if args.batch_size:
@@ -30,11 +41,18 @@ def cmd_train(args):
     if args.resume:
         print(f"Resuming from {args.resume}")
         trainer.load_model(args.resume)
+        if args.fresh:
+            print("Fresh schedule: resetting episode count and best win rate")
+            trainer.episode_count = 0
+            trainer.best_win_rate = 0.0
 
-    trainer.train(
-        total_episodes=args.episodes,
-        eval_interval=args.eval_interval,
-    )
+    try:
+        trainer.train(
+            total_episodes=args.episodes,
+            eval_interval=args.eval_interval,
+        )
+    finally:
+        trainer.close()
 
 
 def cmd_evaluate(args):
@@ -137,11 +155,15 @@ def main():
 
     # Train
     train_parser = subparsers.add_parser("train", help="Train the RL agent via self-play")
-    train_parser.add_argument("--episodes", type=int, default=50000, help="Total training episodes")
-    train_parser.add_argument("--eval-interval", type=int, default=1000, help="Evaluate every N episodes")
+    train_parser.add_argument("--episodes", type=int, default=500000, help="Total training episodes")
+    train_parser.add_argument("--eval-interval", type=int, default=2500, help="Evaluate every N episodes")
     train_parser.add_argument("--resume", type=str, default=None, help="Resume from checkpoint")
     train_parser.add_argument("--lr", type=float, default=None, help="Learning rate")
     train_parser.add_argument("--batch-size", type=int, default=None, help="Episodes per batch")
+    train_parser.add_argument("--parallel", action="store_true", help="Use parallel simulator")
+    train_parser.add_argument("--workers", type=int, default=0, help="Number of workers for parallel simulation")
+    train_parser.add_argument("--server", action="store_true", help="Use server preset (16-core, GPU, large batches)")
+    train_parser.add_argument("--fresh", action="store_true", help="Reset episode count when resuming (fresh LR/entropy schedule)")
 
     # Evaluate
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate model vs heuristic AI")

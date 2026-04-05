@@ -136,11 +136,16 @@ class QwixxSimulator:
         actions.append(44)  # can always skip
         return actions
 
+    def get_score_diff(self, player_id: int) -> int:
+        """Get score difference from perspective of player_id."""
+        s0, s1 = self.get_scores()
+        return s0 - s1 if player_id == 0 else s1 - s0
+
     def apply_action(self, player_id: int, action_idx: int, is_stage1: bool) -> Dict:
         """
         Apply an action for a player. Returns info dict with reward shaping signals.
         """
-        info = {"marked": False, "locked": False, "penalty": False}
+        info = {"marked": False, "locked": False, "penalty": False, "jump_penalty": 0.0}
 
         if action_idx == 44:  # skip
             return info
@@ -168,6 +173,21 @@ class QwixxSimulator:
             is_active = (player_id == self.current_player_idx)
             if not player.can_use_colored_combination(is_active):
                 return info
+
+        # Calculate jump penalty before marking
+        row = player.scoresheet.rows[color]
+        prev_rightmost = row.rightmost_marked
+        current_idx = row.numbers.index(number)
+        
+        skipped = 0
+        if prev_rightmost == -1:
+            skipped = current_idx
+        else:
+            skipped = current_idx - prev_rightmost - 1
+        
+        if skipped > 0:
+            # Penalty for skipping numbers (teaching agent to be dense)
+            info["jump_penalty"] = skipped * 0.02
 
         # Mark the number
         if player.scoresheet.mark_number(color, number):
@@ -251,18 +271,29 @@ class QwixxSimulator:
             for pid in [rolling_player, other_player]:
                 valid = self.get_valid_actions_stage1(pid)
                 if len(valid) > 1:  # more than just skip
+                    prev_score_diff = self.get_score_diff(pid)
+                    
                     action = policy_fns[pid](self, pid, valid, 1)
                     if action not in valid:
                         action = 44  # invalid → skip
 
                     info = self.apply_action(pid, action, is_stage1=True)
+                    new_score_diff = self.get_score_diff(pid)
 
                     if collect_trajectories:
                         reward = 0.0
                         if info["marked"]:
-                            reward += 0.1
+                            reward += 0.05  # base mark reward (reduced from 0.1 since we add diff)
+                        
+                        # Add score differential reward
+                        reward += (new_score_diff - prev_score_diff) * 0.05
+                        
+                        # Subtract jump penalty
+                        reward -= info["jump_penalty"]
+                        
                         if info["locked"]:
                             reward += 0.5
+                            
                         trajectories[pid].append({
                             "player_id": pid,
                             "stage": 1,
@@ -284,16 +315,26 @@ class QwixxSimulator:
             # --- Stage 2: Only rolling player can use white + colored combos ---
             valid = self.get_valid_actions_stage2(rolling_player)
             if len(valid) > 1:  # more than just skip
+                prev_score_diff = self.get_score_diff(rolling_player)
+                
                 action = policy_fns[rolling_player](self, rolling_player, valid, 2)
                 if action not in valid:
                     action = 44
 
                 info = self.apply_action(rolling_player, action, is_stage1=False)
+                new_score_diff = self.get_score_diff(rolling_player)
 
                 if collect_trajectories:
                     reward = 0.0
                     if info["marked"]:
-                        reward += 0.1
+                        reward += 0.05
+                    
+                    # Add score differential reward
+                    reward += (new_score_diff - prev_score_diff) * 0.05
+                    
+                    # Subtract jump penalty
+                    reward -= info["jump_penalty"]
+                    
                     if info["locked"]:
                         reward += 0.5
                     trajectories[rolling_player].append({
@@ -320,7 +361,7 @@ class QwixxSimulator:
                         "stage": 0,  # penalty event
                         "action": -1,
                         "valid_actions": [],
-                        "reward": -0.2,
+                        "reward": -0.25, # increased from -0.2
                         "is_rolling": True,
                     })
 

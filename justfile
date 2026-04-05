@@ -21,3 +21,25 @@ test-backend:
 scan-logs:
     @echo "--- Checking application logs ---"
     @grep -riE "ERROR|CRITICAL|Exception|Traceback" logs/ || echo "No errors found in application logs."
+
+# Local Environment Setup
+setup:
+    pip install -r requirements.txt
+
+# --- RL Training Commands (CLI Based) ---
+
+# Train the RL agent via self-play (e.g., just train-rl --episodes 1000000 --parallel --workers 15)
+train-rl *args:
+    cd backend && python -m app.training.play train {{args}}
+
+# Server training: resume from best model, 15 workers, 500k episodes, LR/entropy annealing
+train-rl-server *args:
+    cd backend && python -m app.training.play train --server --resume app/training/models/best_model.pt --fresh {{args}}
+
+# Evaluate the RL agent vs Hard AI
+eval-rl games="500":
+    cd backend && python -m app.training.play evaluate --games {{games}}
+
+# Watch a single game: RL Agent vs Hard AI
+watch-rl:
+    cd backend && python -m app.training.play watch
