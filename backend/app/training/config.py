@@ -15,25 +15,27 @@ class TrainingConfig:
 
     # PPO hyperparameters
     lr: float = 3e-4
+    lr_min: float = 1e-5  # Minimum LR for cosine annealing
     gamma: float = 0.99  # Discount factor
     gae_lambda: float = 0.95  # GAE lambda
     clip_epsilon: float = 0.2  # PPO clipping
     value_loss_coef: float = 0.5
-    entropy_coef: float = 0.01  # Entropy bonus for exploration
+    entropy_coef: float = 0.05  # Start high for exploration
+    entropy_coef_min: float = 0.005  # Decay to this over training
     max_grad_norm: float = 0.5
 
     # Training loop
     episodes_per_batch: int = 64
     ppo_epochs: int = 4
-    mini_batch_size: int = 32
-    total_episodes: int = 50000
-    eval_interval: int = 1000
-    eval_games: int = 100
-    save_interval: int = 5000
-    
-    # Scaling (Milestone 3)
-    num_workers: int = 4  # Set higher for servers (e.g. 15 for 16-core machine)
-    use_parallel: bool = False # Default to False for local compatibility
+    mini_batch_size: int = 64
+    total_episodes: int = 500000
+    eval_interval: int = 2500
+    eval_games: int = 500
+    save_interval: int = 10000
+
+    # Scaling
+    num_workers: int = 4
+    use_parallel: bool = False
 
     # Self-play
     opponent_update_interval: int = 2000  # Freeze opponent copy every N episodes
@@ -48,4 +50,19 @@ class TrainingConfig:
     # Paths
     model_dir: str = "app/training/models"
     best_model_path: str = "app/training/models/best_model.pt"
-    run_name: str = "ppo_qwixx_v2"
+    run_name: str = "ppo_qwixx_v3"
+
+    @staticmethod
+    def server(workers: int = 15):
+        """Preset for server training (16-core, GPU)."""
+        return TrainingConfig(
+            episodes_per_batch=256,
+            ppo_epochs=6,
+            mini_batch_size=128,
+            total_episodes=500000,
+            eval_interval=2500,
+            eval_games=500,
+            save_interval=10000,
+            num_workers=workers,
+            use_parallel=True,
+        )

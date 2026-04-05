@@ -32,6 +32,10 @@ setup:
 train-rl *args:
     cd backend && python -m app.training.play train {{args}}
 
+# Server training: resume from best model, 15 workers, 500k episodes, LR/entropy annealing
+train-rl-server *args:
+    cd backend && python -m app.training.play train --server --resume app/training/models/best_model.pt --fresh {{args}}
+
 # Evaluate the RL agent vs Hard AI
 eval-rl games="500":
     cd backend && python -m app.training.play evaluate --games {{games}}

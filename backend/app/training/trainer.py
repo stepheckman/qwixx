@@ -57,7 +57,7 @@ class PPOTrainer:
         self.simulator = QwixxSimulator()
         self.episode_count = 0
         self.best_win_rate = 0.0
-        
+
         # Parallel simulator (Milestone 3)
         self.parallel_sim = None
         if self.config.use_parallel:
@@ -68,6 +68,7 @@ class PPOTrainer:
         log_dir = os.path.join("logs/runs", self.config.run_name)
         self.writer = SummaryWriter(log_dir)
         print(f"TensorBoard logging to {log_dir}")
+        print(f"Device: {self.device}")
 
     def close(self):
         """Clean up parallel simulator processes."""
@@ -420,6 +421,22 @@ class PPOTrainer:
         if "best_win_rate" in checkpoint:
             self.best_win_rate = checkpoint["best_win_rate"]
 
+    def _get_entropy_coef(self, progress: float) -> float:
+        """Anneal entropy coefficient from entropy_coef to entropy_coef_min over training."""
+        start = self.config.entropy_coef
+        end = self.config.entropy_coef_min
+        return end + (start - end) * (1.0 - progress)
+
+    def _update_lr(self, progress: float):
+        """Cosine annealing learning rate schedule."""
+        import math
+        lr_max = self.config.lr
+        lr_min = self.config.lr_min
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * progress))
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
+
     def train(self, total_episodes: int = None, eval_interval: int = None, callback=None):
         """
         Main training loop.
@@ -434,9 +451,21 @@ class PPOTrainer:
 
         print(f"Starting PPO training for {total} episodes on {self.device}")
         print(f"Batch size: {self.config.episodes_per_batch}, Eval every: {eval_every}")
+        print(f"LR: {self.config.lr} → {self.config.lr_min} (cosine)")
+        print(f"Entropy: {self.config.entropy_coef} → {self.config.entropy_coef_min} (linear)")
+        if self.episode_count > 0:
+            print(f"Resuming from episode {self.episode_count}")
         print()
 
         while self.episode_count < total:
+            # Compute training progress (0→1) for schedules
+            progress = min(1.0, self.episode_count / total)
+
+            # Update schedules
+            current_lr = self._update_lr(progress)
+            current_entropy = self._get_entropy_coef(progress)
+            self.config.entropy_coef = current_entropy
+
             # Collect experience
             batch = self.collect_batch()
             experiences = batch["experiences"]
@@ -457,13 +486,16 @@ class PPOTrainer:
                 f"Score: {stats['avg_score']:>6.1f} | "
                 f"PL: {loss_stats.get('policy_loss', 0):.4f} | "
                 f"VL: {loss_stats.get('value_loss', 0):.4f} | "
-                f"Ent: {loss_stats.get('entropy', 0):.4f}"
+                f"Ent: {loss_stats.get('entropy', 0):.4f} | "
+                f"LR: {current_lr:.1e}"
             )
 
             # TensorBoard metrics
             self.writer.add_scalar("Game/WinRate_Batch", stats['win_rate'], self.episode_count)
             self.writer.add_scalar("Game/AvgScore_Batch", stats['avg_score'], self.episode_count)
             self.writer.add_scalar("Game/NumExperiences", stats['num_experiences'], self.episode_count)
+            self.writer.add_scalar("Schedule/LR", current_lr, self.episode_count)
+            self.writer.add_scalar("Schedule/EntropyCoef", current_entropy, self.episode_count)
 
             # Update frozen opponent periodically
             if self.episode_count % self.config.opponent_update_interval < self.config.episodes_per_batch:
@@ -484,7 +516,7 @@ class PPOTrainer:
                     self.best_win_rate = eval_stats["win_rate"]
                     self.save_model(self.config.best_model_path)
                     print(f"  ✓ New best model saved (win rate: {self.best_win_rate:.1%})")
-                
+
                 self.writer.add_scalar("Eval/WinRate", eval_stats['win_rate'], self.episode_count)
                 self.writer.add_scalar("Eval/AvgScore", eval_stats['avg_score'], self.episode_count)
 
